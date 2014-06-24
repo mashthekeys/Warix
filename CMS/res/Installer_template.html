@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="[[this:lang /]]">
+<head>
+    <meta charset="utf-8">
+    <title>[[this:title /]]</title>
+    <!-- Thank you for choosing to study my source code. -->
+    <style>
+        body {
+            background: #79F;
+        }
+        #installer {
+            display: block;
+            margin: 0 auto;
+            width: 26em;
+            text-align: center;
+            background: #FFF;
+            padding: 1em;
+            border-radius: 0.5em;
+
+            font-family: 'Comfortaa', sans-serif;
+        }
+        #installer h1 {
+            font-family: 'Audiowide', sans-serif;
+            padding: 0;
+            margin: 0;
+        }
+        #installer h2 {
+            padding: 0;
+            margin: 0.15em 0 0.3em 0;
+        }
+        #installer button {
+            font-family: 'Comfortaa', sans-serif;
+            font-size: 150%;
+            border: #01F outset #01F 3px;
+            background-color: #BDF;
+            border-radius: 5px;
+            padding: 1px 10px;
+        }
+        #installer button[disabled] {
+            color: #FFF;
+            opacity: 0.5;
+        }
+        #installer > button {
+            width: 99%;
+        }
+        #installer button {
+
+        }
+        ul.ui-autocomplete {
+            text-align: center;
+            font-family: 'Anonymous Pro',monospace;
+        }
+        #installer dl {
+            position: relative;
+            padding: 0;
+            margin: 0;
+        }
+        #installer dt {
+            position: absolute;
+            top: auto;
+            left: 0;
+            width: 25%;
+            font-size: 110%;
+            padding: 0.2em;
+            margin: 0;
+        }
+        #installer dd {
+            width: 75%;
+            padding: 0;
+            margin: 0 0 0 25%;
+        }
+        #installer input[type="text"],
+        #installer input[type="password"] {
+            margin: 3px 0;
+            text-align: center;
+            width: 16em;
+            font-size: 110%;
+            font-family: 'Anonymous Pro',monospace;
+        }
+        #installer input[type="text"]:focus,
+        #installer input[type="password"]:focus {
+            /*outline: solid yellow 3px;*/
+            /*box-shadow: 0px yellow;*/
+        }
+        #installer table.object_table {
+            font-family: 'Anonymous Pro',monospace;
+            font-size: 96%;
+        }
+        #installer table.object_table td,
+        #installer table.object_table th {
+            text-align: left;
+        }
+        #installer #test_connection_status {
+            display: block;
+            position: absolute;
+            top: auto;
+            left: 25%;
+            font-size: 110%;
+            padding: 0.2em 0.2em 0.2em 0.5em;
+            margin: 0;
+        }
+        #installer .installer_success {
+            background-color: #AFA;
+            margin: 0 1em;
+        }
+        #installer .installer_error {
+            background-color: #FAA;
+            margin: 0 1em;
+        }
+        #installer .installer_success:before {
+            content: '\2713';
+            margin: 0;
+
+            font-size: 80px;
+            width: 1em;
+            display: inline-block;
+
+            vertical-align: top;
+        }
+        #installer .installer_error:before {
+            content: '\26A0';
+            margin: 0;
+
+            font-size: 80px;
+            width: 1em;
+            display: inline-block;
+
+            vertical-align: top;
+        }
+    </style>
+
+    <link href='//fonts.googleapis.com/css?family=Comfortaa:700,400|Audiowide|Anonymous+Pro:400,700&subset=latin,latin-ext' rel='stylesheet' type='text/css'>
+
+    <link rel="stylesheet" href="lib/jquery-ui/1.10.4/themes/smoothness/jquery-ui.css">
+
+    <script type='text/javascript' src='lib/jquery/jquery-1.11.1.js'></script>
+    <script src="lib/jquery-ui/1.10.4/jquery-ui.js"></script>
+
+    <script type='text/javascript' src="res/Installer_script.js"></script>
+
+    [[this:script /]]
+</head>
+<body>
+<main id="installer">[[this:content /]]</main>
+</body>
+</html>

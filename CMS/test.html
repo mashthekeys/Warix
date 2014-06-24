@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title></title>
+<style>
+    ul {
+        list-style: none;
+        padding: 0;
+    }
+
+    ul li:before
+    {
+        content: '\26A0';
+        margin: 0 1em;
+
+        font-size: 80px;
+
+        vertical-align: top;
+    }
+
+    ul li:first-child:before
+    {
+        content: '\2713';
+        margin: 0 1em;
+    }
+
+    .installer_success {
+        background-color: #AFA;
+        margin: 0 1em;
+    }
+    .installer_error {
+        background-color: #FAA;
+        margin: 0 1em;
+    }
+    .installer_success:before {
+        content: '\2713';
+        margin: 0;
+
+        font-size: 80px;
+        width: 1em;
+        display: inline-block;
+
+        vertical-align: top;
+    }
+    .installer_error:before {
+        content: '\26A0';
+        margin: 0;
+
+        font-size: 80px;
+        width: 1em;
+        display: inline-block;
+
+        vertical-align: top;
+    }
+</style>
+</head>
+<body>
+    <ul>
+        <li>Ello</li>
+        <li>Hello world?</li>
+        <li>Helloooo</li>
+    </ul>
+<br>
+<hr>
+<div class="installer_error">Blah blah</div>
+<div class="installer_success">Blah blah</div>
+</body>
+</html>
