@@ -1,3 +1,9 @@
+## CMS internals
+__config.php
+CMS/log
+/CMS/log
+*.iml
+
 ## Ignore working copies, backups, OS files
 *~
 *.bak
