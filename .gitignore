@@ -1,3 +1,13 @@
+## Ignore working copies, backups, OS files
+*~
+*.bak
+.DS_Store
+Thumbs.db
+desktop.ini
+._*
+.com.apple.timemachine.supported
+
+## GitHub defaults:
 *.rbc
 capybara-*.html
 .rspec
