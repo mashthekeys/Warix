@@ -14,7 +14,7 @@ error_reporting(E_ALL & ~(E_NOTICE | E_STRICT | E_DEPRECATED));
 require_once '../Framework/__autoload.php';
 require_once '../CMS/__autoload.php';
 require_once '../Shop/__autoload.php';
-require_once '../CMS/__config.php';
+@include_once '../CMS/__config.php';
 require_once '../CMS/__init.php';
 
 ErrorLogger::register();
