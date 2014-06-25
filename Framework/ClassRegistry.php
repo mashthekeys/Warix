@@ -4,7 +4,7 @@ namespace Framework;
 
 use PhpParser\Node\Name;
 
-require_once __DIR__.'lib/PHP-Parser/lib/bootstrap.php';
+require_once __DIR__.'/lib/PHP-Parser/lib/bootstrap.php';
 
 /**
  * Analyses PHP class files for annotations.
