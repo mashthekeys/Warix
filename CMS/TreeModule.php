@@ -130,7 +130,7 @@ class TreeModule implements CMSModule
 
                 $urlSuffixField = ltrim(ClassRegistryUtils::findMemberWithRole('moduleUrlSuffix', $moduleClass), '$');
                 if (strlen($urlSuffixField)) {
-                    $url = $item->$urlSuffixField;
+                    $url .= $item->$urlSuffixField;
                 }
             } else {
                 $url = '/' . $item->$idField;

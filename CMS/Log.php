@@ -8,7 +8,7 @@
 
 namespace CMS;
 
-
+// TODO this sequential file-based approach is seriously unscalable
 class Log {
     private static $IO;
 
@@ -43,7 +43,15 @@ class Log {
             self::$IO = fopen(__DIR__.'/log/cms_log.txt','at');
 
             if (!self::$IO) {
-                throw new \ErrorException('Cannot open CMS log file.');
+                if (!is_dir(__DIR__.'/log')) {
+                    mkdir(__DIR__.'/log');
+                }
+
+                self::$IO = fopen(__DIR__.'/log/cms_log.txt','at');
+
+                if (!self::$IO) {
+                    throw new \ErrorException('Cannot open CMS log file.');
+                }
             }
 
             $date = date('r');

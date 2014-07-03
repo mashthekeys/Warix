@@ -1,4 +1,8 @@
 jQuery(function($) {
+    var DEBUG = {
+        appendAJAXJunk: 10, // 10 MB junk data on every request!
+        showPHPErrors: true
+    };
 
 //    var baseUrl = $('head').children('base').prop('href');
 //    if (!baseUrl) {
@@ -56,8 +60,25 @@ jQuery(function($) {
             actionUid: actionUid
         }) + '&' + data;
 
-        // DEBUG ONLY: append 10,000KB of junk data
-        data += '&'.repeat(10240000);
+        if (DEBUG.appendAJAXJunk) {
+            if ($.isFunction(String.prototype.repeat)) {
+                data += '&'.repeat(1024*1024*(DEBUG.appendAJAXJunk));
+            } else {
+                var append = '&&&&&&&&&&&&&&&&'; // 16 & = 2^4
+
+                // 1024 & = 2^10
+                // 1M   & = 2^20
+
+                for (var pow = 4; pow < 20; ++pow) {
+                    append += append;
+                }
+                for (var mult = 1; mult <= DEBUG.appendAJAXJunk; ++mult) {
+                    data += append;
+                }
+
+                append = null;
+            }
+        }
 
         var requestHistory = $form.data('cms_request_history');
 
@@ -117,7 +138,10 @@ jQuery(function($) {
                 error += "\nDetails: "+jqXHR.responseJSON.error;
                 error += "\n         "+jqXHR.responseJSON.reason;
                 error += "\n         "+jqXHR.responseJSON.error_details;
-                error += "\n         "+jqXHR.responseJSON.php_error;
+
+                if (DEBUG.showPHPErrors) {
+                    error += "\n         "+jqXHR.responseJSON.php_error;
+                }
 
             }
 

@@ -34,6 +34,12 @@ class User extends TimeStampedItem {
 
     /**
      * @var string
+     * @persist length=200
+     */
+    public $email;
+
+    /**
+     * @var string
      * @persistSensitive length=255, binary
      */
     private $passwordHash;

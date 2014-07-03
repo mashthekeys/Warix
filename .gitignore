@@ -1,5 +1,6 @@
 ## CMS internals
-__config.php
+__config*.php*
+__installer_config*.php*
 CMS/log
 /CMS/log
 *.iml

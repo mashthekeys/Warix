@@ -1,18 +1,12 @@
 <?php
-/**
- * Created by IntelliJ IDEA.
- * User: Andy
- * Date: 21/05/2014
- * Time: 01:05
- */
-
 namespace Framework;
 
 
+use Framework\mysqli\SchemaController;
 use Framework\TypeUtil;
 
 class PersistenceDB {
-    // Maximum recursion limit when loading objects from the database.
+    /** Maximum recursion limit when loading objects from the database. */
     const STACK_LIMIT = 5;
 
     /** Do not make queries on this field.  Use PersistenceDB::query() instead.
@@ -20,8 +14,8 @@ class PersistenceDB {
      */
     private static $db;
 
-    private static $namespaceShorten = array();
-    private static $namespaceShortenLookup = array();
+    public static $namespaceShorten = array();
+    public static $namespaceShortenLookup = array();
     private static $dbFilters = array();
     private static $dbLoggers = array();
     private static $cache = array();
@@ -124,12 +118,18 @@ class PersistenceDB {
         return $result;
     }
 
-    public static function createTables() {
+    public static function createTables($checkStructure = false) {
 //        echo "\nCREATE TABLES\n";
         self::connect();
 
         $persistClasses = ClassRegistry::listAnnotatedClasses('persist');
 //        echo "\$persistClasses = (",var_dump($persistClasses),")\n";
+
+        $table_exists = array();
+        $res = self::query('SHOW TABLES');
+        while ($row = $res->fetch_row()) {
+            $table_exists[$row[0]] = true;
+        }
 
         foreach ($persistClasses as $class) {
             $classInfo = self::getMemberPersistenceInfo($class);
@@ -142,54 +142,54 @@ class PersistenceDB {
 
             $matchTable = strtr($table, array('_'=>'\\\\_','%'=>'\\\\%'));
 
-            $exists = self::query("SHOW TABLES LIKE '$matchTable'")->num_rows;
+            $exists = $table_exists[$table];
+//            $exists = self::query("SHOW TABLES LIKE '$matchTable'")->num_rows;
 
-            if (!$exists) {
-                $primary = null;
+            if ($checkStructure || !$exists) {
+                $primary = ltrim(ClassRegistryUtils::findMemberWithRole('id', $class),'$');
+                if (!strlen($primary)) {
+                    throw new InvalidAnnotationException("@persist - $table HAS NO PRIMARY KEY\n");
+                }
+                $keys['PRIMARY KEY'] = "PRIMARY KEY (`$primary`)";
 
                 foreach ($classInfo['persistent_fields'] as $field => $doc) {
                     $idProxyDoc = $classInfo['foreign_fields'][$field];
 
                     if ($idProxyDoc) {
                         // should probably utilise doc of foreign field as well
-                        $sqlType = self::getSQLDeclaration($idProxyDoc, 'persist', $table, $field, $keys);
+                        $sqlType = SchemaController::getSQLDeclaration($idProxyDoc, 'persist', $table, $field, $keys);
 
                     } else {
-                        $sqlType = self::getSQLDeclaration($doc, 'persist', $table, $field, $keys);
+                        $sqlType = SchemaController::getSQLDeclaration($doc, 'persist', $table, $field, $keys);
 
                         if ($doc['role']['id']) {
-                            $primary = $field;
+//                            $primary = $field;
                             if (TypeUtil::getSimpleType($doc['var']) === 'int') {
                                 $sqlType .= ' AUTO_INCREMENT';
                             }
                         }
                     }
 
-                    $fields[$field] = "$field $sqlType";
+                    $fields[$field] = "`$field` $sqlType";
                 }
 
                 foreach ($classInfo['sensitive_fields'] as $field => $doc) {
-                    $sqlType = self::getSQLDeclaration($doc, 'persistSensitive', $table, $field, $keys);
+                    $sqlType = SchemaController::getSQLDeclaration($doc, 'persistSensitive', $table, $field, $keys);
 
-                    $fields[$field] = "$field $sqlType";
+                    $fields[$field] = "`$field` $sqlType";
                 }
 
-                $keys[] = "PRIMARY KEY (`$primary`)";
 
                 if (count($fields) == 0) {
                     throw new InvalidAnnotationException("@persist - $table HAS NO FIELDS\n");
-                } else if (!strlen($primary)) {
-                    throw new InvalidAnnotationException("@persist - $table HAS NO PRIMARY KEY\n");
-                } else {
-                    $ok = self::query("CREATE TABLE IF NOT EXISTS `$table` (\n"
-                        .implode(",\n", $fields).",\n"
-                        .implode(",\n", $keys)
-                        ."\n) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;"
-                    );
+                }
 
-                    if (!$ok) {
-                        throw new \ErrorException("PersistenceDB error: ".self::$db->error);
-                    }
+                $options = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin";
+
+                if ($exists) {
+                    SchemaController::alterTable($table, $fields, $keys, $options);
+                } else {
+                    SchemaController::createTable($table, $fields, $keys, $options);
                 }
             }
         }
@@ -263,7 +263,7 @@ class PersistenceDB {
         if ($doc['Framework'] && $doc['persist']) {
             return array(
                 'class' => $type,
-                'table' => self::getTableName($type),
+                'table' => SchemaController::getTableName($type),
             );
         } else {
             return false;
@@ -276,10 +276,20 @@ class PersistenceDB {
         return self::_findById($type, $id, $stack);
     }
     public static function _findById($type, $id, $stack) {
+        if (!strlen($type)) {
+            throw new \InvalidArgumentException("Class name cannot be empty or null.");
+        }
+        if ($id === null) {
+            throw new \InvalidArgumentException("$type ID cannot be null.");
+        } else if (!is_scalar($id)) {
+            throw new \InvalidArgumentException("$type ID cannot be ".gettype($id));
+        }
+
         $idField = ltrim(ClassRegistryUtils::findMemberWithRole('id', $type), '$');
         if (!strlen($idField)) {
             throw new \RuntimeException("Cannot find items of class $type by id.");
         }
+
 
         $classCache = self::$cache[$type];
         if (isset($classCache) && array_key_exists($id, $classCache)) {
@@ -305,6 +315,9 @@ class PersistenceDB {
         return self::_findItems($type, $expression, $limit, $stack);
     }
     private static function _findItems($type, Query $expression, $limit, $stack) {
+        if (!strlen($type)) {
+            throw new \RuntimeException("Class name cannot be empty or null.");
+        }
         $info = self::getMemberPersistenceInfo($type);
 
         if (!$info) {
@@ -362,18 +375,33 @@ class PersistenceDB {
 
             if ($item === null) {
                 foreach ($foreign_fields as $fieldName => $fieldDoc) {
-                    $itemFields["__{$fieldName}_id"] = self::parseDBField($row[$fieldName], $fieldDoc);
+                    $itemFields["__{$fieldName}_id"] = SchemaController::parseDBField($row[$fieldName], $fieldDoc);
                 }
                 foreach ($persistent_fields as $fieldName => $fieldDoc) {
                     $idProxyDoc = $foreign_fields[$fieldName];
                     if ($idProxyDoc) {
-                        $objectFields[$fieldName] = self::parseDBField($row[$fieldName], $fieldDoc, $idProxyDoc);
+//                        $lookupClass = reset(array_keys($fieldDoc['var']['object']));
+//
+//                        $lookupId = SchemaController::parseDBField($row[$fieldName], $fieldDoc, $idProxyDoc);
+//
+//                        var_dump($lookupId);
+//
+//                        $lookupInfo = array(
+//                            'class' => $lookupClass,
+//                            'id' => $lookupId
+//                        );
+                        $lookupInfo = SchemaController::parseDBField($row[$fieldName], $fieldDoc, $idProxyDoc);
+                        if ($lookupInfo === null) {
+                            $itemFields[$fieldName] = null;
+                        } else {
+                            $objectFields[$fieldName] = $lookupInfo;
+                        }
                     } else {
-                        $itemFields[$fieldName] = self::parseDBField($row[$fieldName], $fieldDoc);
+                        $itemFields[$fieldName] = SchemaController::parseDBField($row[$fieldName], $fieldDoc);
                     }
                 }
                 foreach ($sensitive_fields as $fieldName => $fieldDoc) {
-                    $itemFields[$fieldName] = self::parseDBField($row[$fieldName], $fieldDoc);
+                    $itemFields[$fieldName] = SchemaController::parseDBField($row[$fieldName], $fieldDoc);
                 }
 
                 // Instead of calling e.g. $item = new $class()
@@ -422,6 +450,14 @@ class PersistenceDB {
                 $newStack[] = array(__FUNCTION__, $type, $item->$idField);
 
                 foreach ($objectFields as $fieldName => $lookupInfo) {
+                    if (!is_array($lookupInfo)) {
+                        throw new \RuntimeException(var_export($objectFields, 1));
+                    } else if (empty($lookupInfo['id'])) {
+                        throw new \RuntimeException(var_export($objectFields,1));
+                    } else if (empty($lookupInfo['class'])) {
+                        throw new \RuntimeException(var_export($objectFields,1));
+                    }
+
                     $object = PersistenceDB::_findById($lookupInfo['class'],$lookupInfo['id'], $newStack);
 
                     $item->$fieldName = $object;
@@ -469,22 +505,31 @@ class PersistenceDB {
                 call_user_func($fieldDoc['persist']['onStore'], $item);
             }
 
+            $idProxyField = "__{$fieldName}_id";
+
             $idProxyDoc = $info['foreign_fields'][$fieldName];
             if ($idProxyDoc) {
 //                if (is_object($item->$fieldName)) {
 //                    $item->$fieldName
 //                }
 
-                //TODO object is ignored, the __..._id field determines the field by itself
-                $idProxyField = "__{$fieldName}_id";
-                $update[$fieldName] = self::exportFieldToDB($item->$idProxyField, $idProxyDoc);
+                // object is ignored, the __..._id field determines the field by itself
+                $update[$fieldName] = $dbg = SchemaController::exportFieldToDB($item->$idProxyField, $idProxyDoc);
+
+//                if ($fieldName === 'template') {
+//                    $var = $idProxyDoc['var'];
+//                    $type = TypeUtil::getSimpleType($var);
+//                    throw new \ErrorException("[$type] __template_id={$item->__template_id} ".gettype($item->__template_id).". _template_id= {$item->_template_id} ".gettype($item->_template_id)."");
+//                    throw new \ErrorException(var_export($var,1)."[$type] $fieldName = $dbg ".gettype($dbg)." = {$item->_template_id} ".gettype($item->_template_id)."");
+//                    throw new \RuntimeException("TEMPLATE VALUE WRITE: $dbg /$idProxyField  {$item->$idProxyField}");
+//                }
 
 //                if (!$item->$idProxyField) {
 //                    echo \CMS\HTMLUtils::pre_export($item);
 //                    throw new \ErrorException("$idProxyField empty: '{$item->$idProxyField}''");
 //                }
             } else {
-                $update[$fieldName] = self::exportFieldToDB($item->$fieldName, $fieldDoc);
+                $update[$fieldName] = SchemaController::exportFieldToDB($item->$fieldName, $fieldDoc);
             }
         }
 
@@ -495,7 +540,7 @@ class PersistenceDB {
 
             // TODO how do we read the private field ?!
             // AKA, hello Andy, I see you're dealing with the User class
-            $update[$fieldName] = self::exportFieldToDB($item->$fieldName, $fieldDoc);
+            $update[$fieldName] = SchemaController::exportFieldToDB($item->$fieldName, $fieldDoc);
         }
 
         if (!strlen($idField)) {
@@ -592,215 +637,7 @@ class PersistenceDB {
         return $ok;
     }
 
-    public static function getTableName($type) {
-        list($namespace, $class) = NamespaceUtil::splitClass($type);
-
-        $short = self::$namespaceShorten[$namespace];
-        if (strlen($short)) {
-            $namespace = $short;
-        }
-//        return strtr("$namespace\\$class",array('¦'=>'¦¦','\\'=>'¦'));
-        return strtr("$namespace\\$class",array('\\'=>'$'));
-    }
-
-    public static function getFQClassFromTableName($tableName) {
-//        $tableName = strtr($tableName,array('¦'=>'\\'));
-//        $tableName = strtr($tableName,array('\\\\'=>'¦'));
-        $tableName = strtr($tableName,array('$'=>'\\'));
-
-        $split = strrpos($tableName, '\\');
-
-        if ($split === false) {
-            $namespace = self::$namespaceShortenLookup[''];
-            $class = $tableName;
-        } else {
-            $namespace = substr($tableName, 0, $split);
-            $class = substr($tableName, $split+1);
-
-            $short = self::$namespaceShortenLookup[$namespace];
-            if (strlen($short)) {
-                $namespace = $short;
-            }
-        }
-
-        return "$namespace\\$class";
-    }
-
-    public static function getClassFromTableName($tableName) {
-//        $tableName = strtr($tableName,array('¦'=>'\\'));
-//        $tableName = strtr($tableName,array('\\\\'=>'¦'));
-        $tableName = strtr($tableName,array('$'=>'\\'));
-
-        $split = strrpos($tableName, '\\');
-
-        if ($split === false) {
-            $namespace = self::$namespaceShortenLookup[''];
-            $class = $tableName;
-        } else {
-            $namespace = substr($tableName, 0, $split);
-            $class = substr($tableName, $split+1);
-
-            $short = self::$namespaceShortenLookup[$namespace];
-            if (strlen($short)) {
-                $namespace = $short;
-            }
-        }
-
-        return compact('namespace','class');
-    }
-
-    private static function parseDBField($dbValue, $fieldDoc, $proxyFieldDoc = null) {
-        switch (TypeUtil::getSimpleType($fieldDoc['var'])) {
-            case 'object':
-                if ($proxyFieldDoc) {
-                    if ($fieldDoc['var']['null'] && !$dbValue) {
-                        return null;
-                    } else {
-                        $classes = $fieldDoc['var']['object'];
-                        $id = $dbValue;
-
-                        if (empty($classes)) {
-                            trigger_error("Cannot instantiate object without any class name.", E_USER_WARNING);
-                            return null;
-                        } else if ($classes['*']) {
-                            trigger_error("Cannot instantiate object without class name.", E_USER_WARNING);
-                            return null;
-                        }
-
-                        reset($classes);
-                        $class = key($classes);
-
-                        if (!class_exists($class)) {
-                            trigger_error("Cannot instantiate non-existent class $class.", E_USER_WARNING);
-                            return null;
-                        }
-
-                        if (!PersistenceDB::getClassPersistenceInfo($class)) {
-                            trigger_error("Cannot instantiate non-persistent class $class.", E_USER_WARNING);
-                            return null;
-                        }
-
-//                        trigger_error("DUH $class $id DUH.", E_USER_WARNING);
-                        return compact('class', 'id');
-                    }
-                } else {
-                    trigger_error("Cannot instantiate object without __..._id field.", E_USER_WARNING);
-                }
-                return null;
-            case 'array':
-                trigger_error("Cannot populate array for field.", E_USER_WARNING);
-                return array();
-            case 'int':
-                return (int)$dbValue;
-            case 'float':
-                return (float)$dbValue;
-            case 'bool':
-                return (bool)$dbValue;
-            case 'null':
-                return null;
-//            case 'mixed':
-//            case 'string':
-            default:
-                return $dbValue;
-        }
-    }
-
-    private static function exportFieldToDB($fieldValue, $fieldDoc) {
-        switch (TypeUtil::getSimpleType($fieldDoc['var'])) {
-            case 'object':
-                trigger_error("Cannot export object for field.", E_USER_WARNING);
-                return null;
-            case 'array':
-                trigger_error("Cannot export array for field.", E_USER_WARNING);
-                return array();
-            case 'int':
-                return (int)$fieldValue;
-            case 'float':
-                return sprintf("%37.32E", $fieldValue);
-            case 'bool':
-                return $fieldValue ? 1 : 0;
-            case 'null':
-                return 'NULL';
-//            case 'mixed':
-//            case 'string':
-            default:
-                $v = self::$db->real_escape_string((string)$fieldValue);
-                return "'$v'";
-        }
-    }
-
-    private static function stringFieldDBType($fieldPersistDoc, $binary) {
-        if ($fieldPersistDoc['length'] >= 1) {
-            if ($fieldPersistDoc['length'] <= 0xFF) {
-
-                $L = (int)$fieldPersistDoc['length'];
-                return $binary ? "varbinary($L)" : "varchar($L)";
-
-            } else if ($fieldPersistDoc['length'] <= 0xFFFF) {
-                return $binary ? 'blob' : 'text';
-            } else if ($fieldPersistDoc['length'] <= 0xFFFFFF) {
-                return $binary ? 'mediumblob' : 'mediumtext';
-            } else {//if ($fieldPersistDoc['length'] <= 0xFFFFFFFF) {
-                return $binary ? 'longblob' : 'longtext';
-            }
-        } else {
-            return $binary ? 'blob' : 'text';
-        }
-    }
-
-    private static function getSQLDeclaration($doc, $annotationKey, $table, $field, &$keys) {
-        $persistVars = $doc[$annotationKey];
-
-        if ($persistVars === true) {
-            $persistVars = array();
-        }
-
-        $typeDescriptor = $doc['var'];
-        $simpleType = TypeUtil::getSimpleType($typeDescriptor);
-
-//                    echo "\n---createTables $class $field---\n";
-//                    var_dump($simpleType);
-//                    var_dump($typeDescriptor);
-
-        switch ($simpleType) {
-            case 'mixed':
-            case 'string':
-                $sqlType = self::stringFieldDBType($persistVars, false);
-                break;
-
-            case 'null':
-                $sqlType = self::stringFieldDBType(array('length' => 1), false);
-                break;
-
-            case 'float':
-                $sqlType = 'DOUBLE PRECISION';
-                break;
-
-            case 'int':
-                $sqlType = 'INT';
-                break;
-
-            case 'bool':
-                $sqlType = 'TINYINT';
-                break;
-
-            default:
-                throw new InvalidAnnotationException("@$annotationKey - $table $field has type $simpleType.");
-        }
-
-        if ($simpleType === 'null' || $typeDescriptor['null']) {
-            $sqlType .= ' NULL';
-        } else {
-            $sqlType .= ' NOT NULL';
-        }
-
-        if ($doc['persist']['unique']) {
-            $keys[] = "UNIQUE `unique_$field` ($field)";
-
-        } else if ($doc['persist']['index']) {
-            $keys[] = "INDEX `index_$field` ($field)";
-        }
-
-        return $sqlType;
+    public static function escapeString($param) {
+        return self::$db->real_escape_string($param);
     }
 }

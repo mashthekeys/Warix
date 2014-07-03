@@ -8,6 +8,7 @@ use Framework\TimeStampedItem;
  * @Framework
  * @persist
  * @editorTemplate path,ext,lang,title,content,template,stamp_created,stamp_modified
+ * @js testCode
  */
 class Page extends TimeStampedItem {
 
@@ -190,32 +191,43 @@ class Page extends TimeStampedItem {
 
     public function buildScript() {
         $script = '';
-        foreach ($this->scriptParts as $part => $statements) {
+        if (is_array($this->scriptParts)) foreach ($this->scriptParts as $part => $statements) {
             if (substr($part,0,2) === '__') continue;
 
-            $PSB = '\CMS\PageScriptBuilder';
-            if (method_exists($PSB,$part)) {
-                $script .= call_user_func(array($PSB,$part),$statements);
+            if (is_string($statements) && preg_match('~^<script\s~iu', $statements)) {
+                // <script> tags go out as-is.
+                // should check for </script> tag!
+                $script .= $statements;
             } else {
-                $script .= PageScriptBuilder::__scriptTag(array('id'=>$part), implode("\n//\n",$statements));
+                // Wrap statements in <script> tag
+
+                $PSB = '\CMS\PageScriptBuilder';
+                if (method_exists($PSB,$part)) {
+                    $script .= call_user_func(array($PSB,$part),$statements);
+                } else {
+                    $code = is_array($statements) ? implode("\n//\n", $statements) : $statements;
+                    $script .= PageScriptBuilder::__scriptTag(array('id'=>$part), $code);
+                }
             }
+
         }
         return $script;
     }
 
     /**
      * should probably move this to a general CMS / Module class.
-     * @param string $path
+     * @param $path string
      * @return bool
      */
     public static function isValidPath($path) {
-        return $path === '' ||
+        return $path === '' || $path === '/' ||
         ($path{0} === '/'
-            && strlen($path) > 1
-            && strlen($path) == strcspn($path, "?&!<> \t\r\n\v") // no ? & ! < > or spaces anywhere
-            && ($parts = explode('/', substr($path, 1)))
-            && !in_array('', $parts, true) // no empty path segments
+            && strlen($local = substr($path,1))
+            && strlen($local) == strcspn($local, "?&!<> \t\r\n\v") // no ? & ! < > or spaces anywhere
+            && (strpos($local,'//') === false) // no empty path segments
+            && ($parts = explode('/', $local))
             && !in_array('.', $parts, true) // no . path segments
             && !in_array('..', $parts, true) // no .. path segments
         );
-    }}
+    }
+}

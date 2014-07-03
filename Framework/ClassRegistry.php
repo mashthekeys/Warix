@@ -139,6 +139,15 @@ class ClassRegistry {
             //$e->getMessage();
         }
 
+        if (is_array($stmts) && $found && self::$classDoc["$namespace\\$className"]['js']['testCode']) {
+            $prettyPrinter = new JSConverter;
+
+            $nsFolder = self::$namespace[$namespace];
+            $outputFile = $nsFolder . DIRECTORY_SEPARATOR . $className . '_testCode.js';
+
+            file_put_contents($outputFile, $prettyPrinter->prettyPrintFile($stmts));
+        }
+
         return $found;
     }
 

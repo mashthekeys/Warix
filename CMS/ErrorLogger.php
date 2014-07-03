@@ -130,11 +130,18 @@ class ErrorLogger {
         $skip = StringUtil::prefixLength($eFile, dirname($_SERVER['SCRIPT_NAME']));
 
         $eFile = substr($eFile, $skip);
+        $eFile = htmlspecialchars($eFile, ENT_NOQUOTES);
+
+        $eMessage = htmlspecialchars($eMessage, ENT_NOQUOTES);
+
+        $type = htmlspecialchars($type, ENT_NOQUOTES);
+
+        $subtype = htmlspecialchars($subtype, ENT_NOQUOTES);
 
         echo <<<ERROR_TEMPLATE
 <dl class='php_error'>
     <dt>$type</dt><dd>$subtype</dd>
-    <dt>Message</dt><dd>$eMessage</dd>
+    <dt>Message</dt><dd><pre>$eMessage</pre></dd>
     <dt>Location</dt><dd>$eFile $eLine</dd>
 </dl>
 ERROR_TEMPLATE;

@@ -34,10 +34,30 @@ class DevModule implements CMSModule {
      * @throws \Exception Any exception thrown by the module will be handled by the CMS exception handler.
      */
     public function renderModuleUrl($moduleUrl) {
+        $test1 = '1234567890qwertyuiopasdfghjklzxcvbnm';
+        $test2 = '1234567890abcdefghijklmnopqrstuvwxyz';
+        $test3 = '12345#####cvbnm';
+        $test4 = '1234567890#####qrstuvwxyz';
+        $test5 = '1234567890qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM';
+        $test6 = '1234567890abcdefghijklmnopqrstuvwxyzQWERTYUIOPASDFGHJKLZXCVBNM';
 
         $code = array(
             'time()',
-            '\Framework\mysqli\SecureField2_0::test()'
+            '\Framework\mysqli\SecureField2_0::test()',
+
+            "strlen('$test1')",
+            "\\Framework\\StringUtil::prefixLength('$test1','$test1')",
+            "\\Framework\\StringUtil::prefixLength('$test1','$test2')",
+            "\\Framework\\StringUtil::prefixLength('$test1','$test3')",
+            "\\Framework\\StringUtil::prefixLength('$test1','$test4')",
+            "\\Framework\\StringUtil::prefixLength('$test1','$test5')",
+            "\\Framework\\StringUtil::prefixLength('$test1','$test6')",
+            "\\Framework\\StringUtil::suffixLength('$test1','$test1')",
+            "\\Framework\\StringUtil::suffixLength('$test1','$test2')",
+            "\\Framework\\StringUtil::suffixLength('$test1','$test3')",
+            "\\Framework\\StringUtil::suffixLength('$test1','$test4')",
+            "\\Framework\\StringUtil::suffixLength('$test1','$test5')",
+            "\\Framework\\StringUtil::suffixLength('$test5','$test6')",
 //            'gmmktime()',
 //            'date("c")',
 //            'gmdate("c")',
@@ -57,11 +77,11 @@ class DevModule implements CMSModule {
         // Append extra values now...
 //        $values['Hello'] = "World!";
 //
-        $res = PersistenceDB::query("SELECT * FROM CMS\$Page WHERE id=1");
+//        $res = PersistenceDB::query("SELECT * FROM CMS\$Page WHERE id=1");
 
-        $secureField = new \Framework\mysqli\SecureField(mt_rand());
+        $secureField = \Framework\mysqli\SecureField2_0::secure(mt_rand());
 
-        $values['secureFieldValue'] = var_export($secureField->value(),true);
+        $values['secureFieldValue'] = var_export($secureField,true);
         $values['secureFieldStr'] = var_export("$secureField",true);
 
 //        ob_start();

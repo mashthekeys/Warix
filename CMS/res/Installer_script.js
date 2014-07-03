@@ -1,4 +1,5 @@
 jQuery(function($){
+    var WARIX_INSTALLER_DEFAULTS = window.WARIX_INSTALLER_DEFAULTS || {};
     var $installer = $('#installer');
 
     $installer.find('.cms_expander').click(function(event){
@@ -114,9 +115,11 @@ jQuery(function($){
     function updateDBList(dbs) {
         var labels = [], names = [], nameLookup = {};
 
-        if (!dbs.framework_cms) {
-            labels.push({label:'CREATE: framework_cms',value:'framework_cms'});
-            nameLookup.framework_cms = 'framework_cms';
+        var defaultDBName = WARIX_INSTALLER_DEFAULTS['site.db.name'];
+
+        if (defaultDBName && !dbs[defaultDBName]) {
+            labels.push({label:'CREATE: '+defaultDBName, value:defaultDBName});
+            nameLookup[defaultDBName] = defaultDBName;
         }
 
         for (var db in dbs) if (dbs.hasOwnProperty(db)) {

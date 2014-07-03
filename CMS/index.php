@@ -5,19 +5,34 @@ namespace CMS;
 use Framework\PersistenceDB;
 use Framework\Query;
 
-//header('Content-type: text/plain; charset="UTF-8"');
+/**************************************************************************
+ * BEGIN Warix Bootstrap
+ **************************************************************************/
+// Set development flags
+define('CMS_DEV_MODE','1');
+
+// Set default content header
 header('Content-type: text/html; charset="UTF-8"');
 
-ini_set('display_errors','1');
+// Set initial error reporting
+ini_set('display_errors',@CMS_DEV_MODE ? 1 : 0);
 error_reporting(E_ALL & ~(E_NOTICE | E_STRICT | E_DEPRECATED));
 
+// Load core modules
 require_once '../Framework/__autoload.php';
 require_once '../CMS/__autoload.php';
-require_once '../Shop/__autoload.php';
-@include_once '../CMS/__config.php';
-require_once '../CMS/__init.php';
 
-ErrorLogger::register();
+// Load __config.php, if it exists.
+// Note that errors in __config.php are suppressed, and will only be
+// logged if the Installer is called in to repair the CMS installation.
+@include_once '../CMS/__config.php';
+
+// __init.php handles the rest of the bootstrap procedure.
+// * The ErrorLogger is started.
+// * The installer will be run if site.db config is missing.
+// * The installer will be run if the database connection fails.
+// * Additional modules are loaded.
+require_once '../CMS/__init.php';
 
 $fullPath = (string)$_SERVER['REQUEST_URI'];
 

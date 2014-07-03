@@ -12,6 +12,7 @@ use Framework\PersistenceDB;
 use Framework\Query;
 use Framework\StringUtil;
 
+
 /**
  * DBModule implements methods for the built-in data handling module.
  *
@@ -158,7 +159,9 @@ class DBModule implements CMSModule {
             }
 
             $langField = ltrim(ClassRegistryUtils::findMemberWithRole('lang', $moduleClass), '$');
-            $item->$langField = Config::get('site.lang');
+            if (strlen($langField)) {
+                $item->$langField = Config::get('site.lang');
+            }
 
             if (strlen($urlSuffixField) && $ext !== $defaultExt) {
                 // redirect to default extension for this object type
@@ -261,6 +264,7 @@ class DBModule implements CMSModule {
      * This is most commonly used when handling a JSON request from an
      * actionCommand button, but it can also be used directly.
      *
+     *
      * If the command is executed successfully, $response['ok'] must be true.
      *
      * In case of error, $response['error'] should be set to a description.
@@ -289,20 +293,32 @@ class DBModule implements CMSModule {
                 $item = DBModule::loadByModuleUrl($this->dbClass, $moduleUrl);
 
                 if ($item === null) {
-                    $moduleAllowsCreation = true;
+                    $moduleAllowsCreation = ($this->dbClass === 'CMS\Page');
                     $moduleAllowsPath = Page::isValidPath($moduleUrl);
 
                     if (!$moduleAllowsCreation) {
                         throw new \ErrorException('Module does not allow item creation.');
                     } else if (!$moduleAllowsPath) {
-                        throw new \ErrorException('Module does not allow item creation at that path.');
+                        throw new \ErrorException('Module does not allow item creation at that path.'.$moduleUrl);
                     } else {
+                        $dbClass = $this->dbClass;
+                        $item = new $dbClass();
 
+                        $moduleUrlField = ltrim(ClassRegistryUtils::findMemberWithRole('moduleUrl', $dbClass));
+                        $moduleUrlSuffixField = ltrim(ClassRegistryUtils::findMemberWithRole('moduleUrlSuffix', $dbClass));
 
+                        if (strlen($moduleUrlSuffixField)) {
+                            list($path, $ext) = URLUtil::pathSplit($moduleUrl);
+
+                            $item->$moduleUrlField = $path;
+                            $item->$moduleUrlSuffixField = $ext;
+                        } else {
+                            $item->$moduleUrlField = $moduleUrl;
+                        }
                     }
                 }
                 if ($item === null) {
-                    throw new \ErrorException("Item does not exist.");
+                    throw new \ErrorException("Item 'does not exist.");
                 }
 
 //                $debug_written = array();
@@ -313,10 +329,14 @@ class DBModule implements CMSModule {
                     } else {
                         if ($foreign_fields[$field]) {
                             list($value, $validation) = Editor::parseUserInput($data, $field, $doc, $foreign_fields[$field]);
-                            $write = "_{$field}_id";
+                            $write = "__{$field}_id";
                         } else {
                             list($value, $validation) = Editor::parseUserInput($data, $field, $doc);
                             $write = $field;
+                        }
+
+                        if ($field === 'template' && !$value) {
+                            $validationProblems[$field] = "$field / $write = '$value' ".gettype($value);
                         }
 
                         if ($validation === null) {

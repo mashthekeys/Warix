@@ -33,6 +33,13 @@ class Installer {
         $builtinPage->template_source = file_get_contents('res/Installer_template.html');
         $builtinPage->title = $title;
         $builtinPage->content = $content;
+
+        $builtinPage->scriptParts['WARIX_INSTALLER_DEFAULTS'] =
+            'window.WARIX_INSTALLER_DEFAULTS = '.InstallerDefaults::publishDefaultsJSON().';';
+
+        $builtinPage->scriptParts['WARIX_INSTALLER'] =
+            '<script type="text/javascript" src="res/Installer_script.js"></script>';
+
         echo $builtinPage->render();
     }
 
@@ -44,10 +51,20 @@ class Installer {
             self::jsonTask_runInstaller();
         }
 
-        $host = htmlspecialchars(Config::get('site.db.host','localhost'),ENT_QUOTES);
-        $username = htmlspecialchars(Config::get('site.db.username','cms_user'),ENT_QUOTES);
-        $password = htmlspecialchars(Config::get('site.db.password','abGJDK394BaMNXce'),ENT_QUOTES);
-        $db = htmlspecialchars(Config::get('site.db.db_name','framework_cms'),ENT_QUOTES);
+        if (file_exists('../CMS/__installer_config.php')) {
+            include '../CMS/__installer_config.php';
+        }
+        if (file_exists('../CMS/__config.php')) {
+            // Overwrite defaults with local values.
+            // Also, on this run, errors will be logged!
+            include '../CMS/__config.php';
+        }
+
+        // should rewrite installer so that sensitive details are never published
+        $host = htmlspecialchars(Config::get('site.db.host',InstallerDefaults::get('site.db.host')),ENT_QUOTES);
+        $username = htmlspecialchars(Config::get('site.db.username',InstallerDefaults::get('site.db.username')),ENT_QUOTES);
+        $password = htmlspecialchars(InstallerDefaults::get('site.db.password'),ENT_QUOTES);
+        $db = htmlspecialchars(Config::get('site.db.db_name',InstallerDefaults::get('site.db.db_name')),ENT_QUOTES);
 
         $content = <<<CONTENT
 <h1>CMS</h1>
@@ -55,6 +72,7 @@ class Installer {
 <form onsumbit='return false;'><div class='installer_form'>
     <button type='button' id='installer_go' class='cms_expander'>Go!</button>
     <div class='cms_expandable' style='display:none'>
+        <h3>Database Connection</h3>
         <dl>
             <dt>Host</dt>
             <dd><input type='text' name='site.db.host' value='$host' autocomplete='off' /></dd>
@@ -72,11 +90,20 @@ class Installer {
                 <button type='button' id='installer_test' disabled='disabled'>Test</button>
                 <div id='test_connection_output'></div>
             </dd>
-            <dd id='section_install' style='display:none'>
-                <button type='button' id='install_run' disabled='disabled'>Install</button>
-                <div id='installer_output'></div>
-            </dd>
         </dl>
+        <div id='section_install' style='display:none'>
+            <h3>Your Admin Login</h3>
+            <dl>
+                <dt>Username</dt>
+                <dd><input type='text' name='login.username' value='' autocomplete='off' /></dd>
+                <dt>Password</dt>
+                <dd><input type='text' name='login.password' value='' autocomplete='off' /></dd>
+                <dd>
+                    <button type='button' id='install_run' disabled='disabled'>Install</button>
+                    <div id='installer_output'></div>
+                </dd>
+            </dl>
+        </div>
     </div>
 </div></form>
 CONTENT;
