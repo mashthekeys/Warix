@@ -288,6 +288,7 @@ class DBModule implements CMSModule {
                 $persistent_fields = $info['persistent_fields'];
                 $foreign_fields = $info['foreign_fields'];
 
+
                 $validationProblems = array();
 
                 $item = DBModule::loadByModuleUrl($this->dbClass, $moduleUrl);

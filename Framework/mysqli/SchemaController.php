@@ -8,6 +8,7 @@ use Framework\PersistenceDB;
 use Framework\TypeUtil;
 
 class SchemaController {
+    const CHARSET = 'utf8mb4';
     const COLLATION = 'utf8mb4_bin';
 
     public static function getTableName($type) {
@@ -24,7 +25,7 @@ class SchemaController {
     public static function getFQClassFromTableName($tableName) {
 //        $tableName = strtr($tableName,array('¦'=>'\\'));
 //        $tableName = strtr($tableName,array('\\\\'=>'¦'));
-        $tableName = strtr($tableName,array('$'=>'\\'));
+        $tableName = strtr($tableName,array('$$' => '::','$'=>'\\'));
 
         $split = strrpos($tableName, '\\');
 
@@ -124,13 +125,38 @@ class SchemaController {
     }
 
     public static function exportFieldToDB($fieldValue, $fieldDoc) {
-        switch (TypeUtil::getSimpleType($fieldDoc['var'])) {
+        $varAnnotation = $fieldDoc['var'];
+        $simpleType = TypeUtil::getSimpleType($varAnnotation);
+        switch ($simpleType) {
             case 'object':
                 trigger_error("Cannot export object for field.", E_USER_WARNING);
                 return null;
+
             case 'array':
+                $arrayTypes = $varAnnotation['array'];
+                $arrayType = TypeUtil::getSimpleType($arrayTypes);
+
+                if ($arrayType === 'object') {
+                    // TODO this requires MM writes!
+
+                } else if ($arrayType === 'array') {
+
+                } else {
+                    $valuesEnc = array_map(function ($value) use ($arrayTypes) {
+                        return self::_exportFieldToDB($value, $arrayTypes);
+                    }, $fieldValue);
+                    return implode('|', $valuesEnc);
+                }
                 trigger_error("Cannot export array for field.", E_USER_WARNING);
                 return array();
+
+            default:
+                return self::_exportScalarToDB($fieldValue, $varAnnotation);
+        }
+    }
+    private static function _exportFieldToDB($fieldValue, $varAnnotation) {
+        $simpleType = TypeUtil::getSimpleType($varAnnotation);
+        switch ($simpleType) {
             case 'int':
                 return (int)$fieldValue;
             case 'float':
@@ -148,15 +174,16 @@ class SchemaController {
     }
 
     public static function stringFieldDBType($fieldPersistDoc, $binary, $collation = self::COLLATION) {
-        if ($fieldPersistDoc['length'] >= 1) {
-            if ($fieldPersistDoc['length'] <= 0xFF) {
+        $length = $fieldPersistDoc['length'];
+        if ($length >= 1) {
+            if ($length <= 0xFF) {
 
-                $L = (int)$fieldPersistDoc['length'];
+                $L = (int)$length;
                 $type = $binary ? "varbinary($L)" : "varchar($L)" . ' COLLATE '. $collation;
 
-            } else if ($fieldPersistDoc['length'] <= 0xFFFF) {
+            } else if ($length <= 0xFFFF) {
                 $type = $binary ? 'blob' : 'text' . ' COLLATE '. $collation;
-            } else if ($fieldPersistDoc['length'] <= 0xFFFFFF) {
+            } else if ($length <= 0xFFFFFF) {
                 $type = $binary ? 'mediumblob' : 'mediumtext' . ' COLLATE '. $collation;
             } else {//if ($fieldPersistDoc['length'] <= 0xFFFFFFFF) {
                 $type = $binary ? 'longblob' : 'longtext' . ' COLLATE '. $collation;
@@ -203,6 +230,53 @@ class SchemaController {
                 $sqlType = 'TINYINT';
                 break;
 
+            case 'object':
+                // TODO implement foreign key lookup...
+                throw new InvalidAnnotationException("TODO implement foreign key lookup");
+                break;
+
+            case 'array':
+                $arrayTypes = $doc['var']['array'];
+                $arrayType = TypeUtil::getSimpleType($arrayTypes);
+
+                if ($arrayType === 'object') {
+                    // TODO implement MM lookup...
+
+                    reset($arrayTypes);
+                    $reflectedClass = key($reflectedClasses);
+                    $reflectedClassInfo = PersistenceDB::getMemberPersistenceInfo($reflectedClass);
+
+                    if ($doc['persist']['reflect']) {
+                        // TODO no local storage, so no field type to return
+                        return null;
+                    } else if ($reflectedClassInfo['doc']['persist']['embedded']) {
+                        $mmTable = $table.'$$'.$field;
+
+                        $embedded_fields = $reflectedClassInfo['foreign_fields'] + $reflectedClassInfo['persistent_fields'];
+
+                        $mmTableFields = [$field => $doc] + $embedded_fields;
+
+                    } else {
+                        $mmTable = $table.'$$'.$field;
+
+                        $mmTableFields = [
+                            $field => $doc,
+                            $reflectedField => $reflectedDoc,
+                        ];
+
+                        $mmTableKeys[$field] = $field;
+                        $mmTableKeys[$reflectedField] = $reflectedField;
+                    }
+
+                } else if ($arrayType === 'array') {
+                    throw new InvalidAnnotationException("@$annotationKey - $table $field cannot be multi-dimensional array.");
+
+                } else {
+                    // TODO implement literal array...
+                    $sqlType = self::stringFieldDBType($doc['persist'], false);
+                }
+                break;
+
             default:
                 throw new InvalidAnnotationException("@$annotationKey - $table $field has type $simpleType.");
         }
@@ -211,6 +285,12 @@ class SchemaController {
             $sqlType .= ' NULL';
         } else {
             $sqlType .= ' NOT NULL';
+        }
+
+        if ($doc['role']['id']) {
+            if (TypeUtil::getSimpleType($doc['var']) === 'int') {
+                $sqlType .= ' AUTO_INCREMENT';
+            }
         }
 
         if ($doc['persist']['unique']) {
@@ -541,5 +621,9 @@ class SchemaController {
         }
 
         return array($expected,$current);
+    }
+
+    public static function tableOptions() {
+        return "ENGINE=InnoDB DEFAULT CHARSET=".self::CHARSET." COLLATE=".self::COLLATION;
     }
 }

@@ -24,38 +24,38 @@ class TypeUtil {
             $possibleTypes = self::parseVarAnnotation($type);
         }
 
-        $isObject = false;
-        $isArray = false;
-        $isMixed = false;
-        $isString = false;
-        $isFloat = false;
-        $isInt = false;
-        $isBool = false;
-        $isNull = false;
-
-        foreach ($possibleTypes as $possibleType => $typeParams) {
-            if ($possibleType === 'object') {
-                $isObject = true;
-            } else if ($possibleType === 'array') {
-                $isArray = true;
-            } else if ($possibleType === 'mixed') {
-                $isMixed = true;
-            } else if ($possibleType === 'string') {
-                $isString = true;
-            } else if ($possibleType === 'float' || $possibleType === 'double') {
-                $isFloat = true;
-            } else if ($possibleType === 'int' || $possibleType === 'integer') {
-                $isInt = true;
-            } else if ($possibleType === 'bool' || $possibleType === 'boolean') {
-                $isBool = true;
-            } else if ($possibleType === 'null') {
-                $isNull = true;
-            } else if (substr($possibleType, -2) === '[]') {
-                $isArray = true;
-            } else {
-                $isObject = true;
-            }
-        }
+//        $isObject = false;
+//        $isArray = false;
+//        $isMixed = false;
+//        $isString = false;
+//        $isFloat = false;
+//        $isInt = false;
+//        $isBool = false;
+//        $isNull = false;
+//
+//        foreach ($possibleTypes as $possibleType => $typeParams) {
+//            if ($possibleType === 'object') {
+//                $isObject = true;
+//            } else if ($possibleType === 'array') {
+//                $isArray = true;
+//            } else if ($possibleType === 'mixed') {
+//                $isMixed = true;
+//            } else if ($possibleType === 'string') {
+//                $isString = true;
+//            } else if ($possibleType === 'float' || $possibleType === 'double') {
+//                $isFloat = true;
+//            } else if ($possibleType === 'int' || $possibleType === 'integer') {
+//                $isInt = true;
+//            } else if ($possibleType === 'bool' || $possibleType === 'boolean') {
+//                $isBool = true;
+//            } else if ($possibleType === 'null') {
+//                $isNull = true;
+//            } else if (substr($possibleType, -2) === '[]') {
+//                $isArray = true;
+//            } else {
+//                $isObject = true;
+//            }
+//        }
 
         // In case of object|array type, return array.
         if ($possibleTypes['array']) return 'array';

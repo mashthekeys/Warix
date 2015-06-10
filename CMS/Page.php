@@ -54,13 +54,8 @@ class Page extends TimeStampedItem {
      */
     public $lang;
 
-    /**
-     * Template ID
-     * @label Template ID
-     * @var int
-     * @persist
-     */
-    public $__template_id = 0;
+    /** @var int */
+    public $__template_id;
 
     /**
      * @label Template

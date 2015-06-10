@@ -19,6 +19,7 @@ class PersistenceDB {
     private static $dbFilters = array();
     private static $dbLoggers = array();
     private static $cache = array();
+    private static $classPersistence = array();
 
 
     public static function setDB(\mysqli $db) {
@@ -140,7 +141,7 @@ class PersistenceDB {
             $fields = array();
             $keys = array();
 
-            $matchTable = strtr($table, array('_'=>'\\\\_','%'=>'\\\\%'));
+//            $matchTable = strtr($table, array('_'=>'\\\\_','%'=>'\\\\%'));
 
             $exists = $table_exists[$table];
 //            $exists = self::query("SHOW TABLES LIKE '$matchTable'")->num_rows;
@@ -150,32 +151,19 @@ class PersistenceDB {
                 if (!strlen($primary)) {
                     throw new InvalidAnnotationException("@persist - $table HAS NO PRIMARY KEY\n");
                 }
-                $keys['PRIMARY KEY'] = "PRIMARY KEY (`$primary`)";
 
-                foreach ($classInfo['persistent_fields'] as $field => $doc) {
-                    $idProxyDoc = $classInfo['foreign_fields'][$field];
+                $keys['PRIMARY KEY'] = $primary;
 
-                    if ($idProxyDoc) {
-                        // should probably utilise doc of foreign field as well
-                        $sqlType = SchemaController::getSQLDeclaration($idProxyDoc, 'persist', $table, $field, $keys);
-
-                    } else {
-                        $sqlType = SchemaController::getSQLDeclaration($doc, 'persist', $table, $field, $keys);
-
-                        if ($doc['role']['id']) {
-//                            $primary = $field;
-                            if (TypeUtil::getSimpleType($doc['var']) === 'int') {
-                                $sqlType .= ' AUTO_INCREMENT';
-                            }
-                        }
-                    }
-
+                foreach ($classInfo['foreign_fields'] as $field => $doc) {
+                    $sqlType = SchemaController::getSQLDeclaration($field, 'persist', $table, $field, $keys);
                     $fields[$field] = "`$field` $sqlType";
                 }
-
+                foreach ($classInfo['persistent_fields'] as $field => $doc) {
+                    $sqlType = SchemaController::getSQLDeclaration($doc, 'persist', $table, $field, $keys);
+                    $fields[$field] = "`$field` $sqlType";
+                }
                 foreach ($classInfo['sensitive_fields'] as $field => $doc) {
                     $sqlType = SchemaController::getSQLDeclaration($doc, 'persistSensitive', $table, $field, $keys);
-
                     $fields[$field] = "`$field` $sqlType";
                 }
 
@@ -184,7 +172,7 @@ class PersistenceDB {
                     throw new InvalidAnnotationException("@persist - $table HAS NO FIELDS\n");
                 }
 
-                $options = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin";
+                $options = SchemaController::tableOptions();
 
                 if ($exists) {
                     SchemaController::alterTable($table, $fields, $keys, $options);
@@ -198,77 +186,119 @@ class PersistenceDB {
     }
 
     /**
-     * @param string $type
-     * @param string|null $field
+     * @param $class
      * @return array|bool
      */
-    public static function getMemberPersistenceInfo($type, $field = null) {
-//        list($namespace, $class) = NamespaceUtil::splitClass($type);
+    public static function getClassPersistenceInfo($class) {
+        $doc = ClassRegistry::getClassAnnotations($class);
 
-
-        $classInfo = self::getClassPersistenceInfo($type);
-
-        if (!$classInfo) return false;
-
-        if ($field === null) {
-            $memberDoc = ClassRegistry::getMemberAnnotations($type);
-            $persistent_fields = array();
-            $sensitive_fields = array();
-            $foreign_fields = array();
-
-            foreach ($memberDoc as $member => $doc) if ($member{0}==='$') {
-                if (substr($member,1,2) === '__' && substr($member,-3) === '_id') {
-                    // persistent fields in the form $__..._id must implement the ID lookup of a persistent object field
-                    // of the same name, less the __ prefix and __id suffix.
-                    $foreign_fields[substr($member, 3, -3)] = $doc;
-
-                } else if ($doc['persistSensitive']) {
-                    $sensitive_fields[substr($member, 1)] = $doc;
-                } else if ($doc['persist']) {
-                    $persistent_fields[substr($member, 1)] = $doc;
-                }
-            }
-
-            $classInfo['persistent_fields'] = $persistent_fields;
-            $classInfo['sensitive_fields'] = $sensitive_fields;
-            $classInfo['foreign_fields'] = $foreign_fields;
-            return $classInfo;
-        } else {
-            $doc = ClassRegistry::getMemberAnnotations($type, $field);
-
-            if (!($doc['persist'] || $doc['persistSensitive'])) {
-                return false;
-            }
-
-//            if (strlen($doc['var'])) {
-//                $class = preg_split('/\s*\|\s*/u', trim($doc['var']));
-//            } else {
-//                $class = array('mixed');
-//            }
-
-            return $doc;
-        }
-    }
-
-
-    /**
-     * @param $type
-     * @return array|bool
-     */
-    public static function getClassPersistenceInfo($type) {
-//        list($namespace, $class) = NamespaceUtil::splitClass($type);
-
-        $doc = ClassRegistry::getClassAnnotations($type);
-
-        if ($doc['Framework'] && $doc['persist']) {
+//        if ($doc['Framework'] && $doc['persist']) {
+        if ($doc['persist']) {
             return array(
-                'class' => $type,
-                'table' => SchemaController::getTableName($type),
+                'class' => $class,
+                'doc' => $doc,
+                'table' => SchemaController::getTableName($class),
             );
         } else {
             return false;
         }
     }
+
+    /**
+     * @param string $class
+     * @param string|null $field
+     * @return array|bool
+     */
+    public static function getMemberPersistenceInfo($class, $field = null) {
+//        list($namespace, $class) = NamespaceUtil::splitClass($type);
+
+        if (self::$classPersistence[$class]) {
+            $classInfo = self::$classPersistence[$class];
+        } else {
+            $classInfo = self::getClassPersistenceInfo($class);
+
+            if (!$classInfo) return false;
+
+            $memberDoc = ClassRegistry::getMemberAnnotations($class);
+            $persistMembers = array();
+            $persistent_fields = array();
+            $sensitive_fields = array();
+            $foreign_field_overrides = array();
+            $auto_foreign_fields = array();
+
+            foreach ($memberDoc as $member => $doc) {
+                if ($doc['persistSensitive'] || $doc['persist']) {
+                    if ($member{0} !== '$') {
+                        // ignore const and functions
+                    } else if (substr($member, 1, 2) === '__' && substr($member, -3) === '_id') {
+                        // Fields in the form $__..._id usually represent the ID
+                        // of a persistent object field. The field does not normally
+                        // need an @persist declaration.  Any @persist declaration
+                        // will override the persist parameters of the object's id
+                        // field.
+                        $fieldName = substr($member, 3, -3);
+                        $foreign_field_overrides[$fieldName] = $doc;
+
+                        if ($doc['persistSensitive']) {
+                            $sensitive_fields[$fieldName] = $doc;
+                        } else if ($doc['persist']) {
+                            $persistent_fields[$fieldName] = $doc;
+                        }
+                    } else {
+                        $persistMembers[$member] = $memberDoc;
+                    }
+                }
+            }
+            foreach ($persistMembers as $member => $doc) {
+                $fieldName = substr($member, 1);
+                if ($doc['persistSensitive']) {
+                    $sensitive_fields[$fieldName] = $doc;
+                } else if ($doc['persist']) {
+                    $persistent_fields[$fieldName] = $doc;
+
+                    $objectClass = $doc['type']['object'];
+                    if ($objectClass) {
+                        $fieldClass = array_pop($objectClass);
+
+                        $classPersistenceInfo = PersistenceDB::getClassPersistenceInfo($fieldClass);
+
+                        if (!$classPersistenceInfo) {
+                            trigger_error("Field $class::$member cannot store non-persistent $fieldClass objects.", E_USER_WARNING);
+                        } else {
+                            $foreignKey = ClassRegistryUtils::findMemberWithRole($fieldClass, 'id');
+                            if (!$foreignKey) {
+                                trigger_error("Field $class::$member cannot find ID field for $fieldClass objects.", E_USER_WARNING);
+                            } else {
+                                $copyDoc = ClassRegistry::getMemberAnnotations($fieldClass, $foreignKey);
+                                $copyDoc['role'] = 'objectRef';
+                                $auto_foreign_fields[$fieldName] = $copyDoc;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Local parameters to @persist override those loaded from the object's class
+            $foreign_fields = $foreign_field_overrides + $auto_foreign_fields;
+
+            $classInfo['persistent_fields'] = $persistent_fields;
+            $classInfo['sensitive_fields'] = $sensitive_fields;
+            $classInfo['foreign_fields'] = $foreign_fields;
+            self::$classPersistence[$class] = $classInfo;
+        }
+        if ($field === null) {
+            return $classInfo;
+        } else {
+            $doc = $classInfo[$field];
+
+            if (!($doc['persist'] || $doc['persistSensitive'])) {
+                return false;
+            }
+
+            return $doc;
+        }
+    }
+
 
     public static function findById($type, $id) {
         $stack = array(array(__FUNCTION__, $type, 'query'));
