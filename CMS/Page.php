@@ -202,7 +202,7 @@ class Page extends TimeStampedItem {
                     $script .= call_user_func(array($PSB,$part),$statements);
                 } else {
                     $code = is_array($statements) ? implode("\n//\n", $statements) : $statements;
-                    $script .= PageScriptBuilder::__scriptTag(array('id'=>$part), $code);
+                    $script .= PageScriptBuilder::__scriptTag('id', $code);
                 }
             }
 
