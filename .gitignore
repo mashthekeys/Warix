@@ -1,4 +1,5 @@
 ## CMS internals
+*.export.*
 __config*.php*
 __installer_config*.php*
 CMS/log
