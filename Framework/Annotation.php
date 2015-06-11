@@ -16,6 +16,8 @@ class Annotation {
             $phpDoc = (string)$doc;
         }
 
+//        $annotations['__SOURCE__'] = $phpDoc;
+
         if (substr($phpDoc,0,3)==='/**'||substr($phpDoc,-2)==='*/') {
             $phpDoc = substr($phpDoc, 3, -2);
         }

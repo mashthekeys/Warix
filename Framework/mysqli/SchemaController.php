@@ -2,6 +2,8 @@
 namespace Framework\mysqli;
 
 
+use Framework\ClassRegistry;
+use Framework\ClassRegistryUtils;
 use Framework\InvalidAnnotationException;
 use Framework\NamespaceUtil;
 use Framework\PersistenceDB;
@@ -71,41 +73,40 @@ class SchemaController {
     public static function parseDBField($dbValue, $fieldDoc, $proxyFieldDoc = null) {
         switch (TypeUtil::getSimpleType($fieldDoc['var'])) {
             case 'object':
-                if ($proxyFieldDoc) {
-                    if ($fieldDoc['var']['null'] && !$dbValue) {
-                        return null;
-                    } else {
-                        $classes = $fieldDoc['var']['object'];
-                        $id = $dbValue;
-
-                        if (empty($classes)) {
-                            trigger_error("Cannot instantiate object without any class name.", E_USER_WARNING);
-                            return null;
-                        } else if ($classes['*']) {
-                            trigger_error("Cannot instantiate object without class name.", E_USER_WARNING);
-                            return null;
-                        }
-
-                        reset($classes);
-                        $class = key($classes);
-
-                        if (!class_exists($class)) {
-                            trigger_error("Cannot instantiate non-existent class $class.", E_USER_WARNING);
-                            return null;
-                        }
-
-                        if (!PersistenceDB::getClassPersistenceInfo($class)) {
-                            trigger_error("Cannot instantiate non-persistent class $class.", E_USER_WARNING);
-                            return null;
-                        }
-
-//                        trigger_error("DUH $class $id DUH.", E_USER_WARNING);
-                        return compact('class', 'id');
-                    }
+                if ($fieldDoc['var']['null'] && !$dbValue) {
+                    return null;
                 } else {
-                    trigger_error("Cannot instantiate object without __..._id field.", E_USER_WARNING);
+                    $classes = $fieldDoc['var']['object'];
+                    $id = $dbValue;
+
+                    if (count($classes) == 0) {
+                        trigger_error("Cannot instantiate object without any class name.", E_USER_WARNING);
+                        return null;
+                    } else if (count($classes) == 0) {
+                        trigger_error("Cannot instantiate object with multiple class names.", E_USER_WARNING);
+                        return null;
+                    } else if ($classes['*']) {
+                        trigger_error("Cannot instantiate object without class name.", E_USER_WARNING);
+                        return null;
+                    }
+
+                    reset($classes);
+                    $class = key($classes);
+
+                    if (!class_exists($class)) {
+                        trigger_error("Cannot instantiate non-existent class $class.", E_USER_WARNING);
+                        return null;
+                    }
+
+                    if (!PersistenceDB::getClassPersistenceInfo($class)) {
+                        trigger_error("Cannot instantiate non-persistent class $class.", E_USER_WARNING);
+                        return null;
+                    }
+
+                    return PersistenceDB::findById($class,$id);
+//                    $foreignKey = ltrim(ClassRegistryUtils::findMemberWithRole($class, 'id'),'$');
+//                    $foreignDoc = PersistenceDB::getMemberPersistenceInfo($class,$foreignKey);
                 }
-                return null;
             case 'array':
                 trigger_error("Cannot populate array for field.", E_USER_WARNING);
                 return array();
@@ -129,8 +130,20 @@ class SchemaController {
         $simpleType = TypeUtil::getSimpleType($varAnnotation);
         switch ($simpleType) {
             case 'object':
-                trigger_error("Cannot export object for field.", E_USER_WARNING);
-                return null;
+                if ($fieldValue === null) {
+                    return null;
+                } else {
+                    $class = get_class($fieldValue);
+                    $member = ClassRegistryUtils::findMemberWithRole($class, 'id');
+                    $key = ltrim($member, '$');
+                    if (!strlen($key)) {
+                        trigger_error("Cannot export object for field.", E_USER_WARNING);
+                        return null;
+                    } else {
+                        $exportValue = $fieldValue->$key;
+                        return self::_exportScalarToDB($exportValue, ClassRegistry::getMemberAnnotations($class,$member));
+                    }
+                }
 
             case 'array':
                 $arrayTypes = $varAnnotation['array'];
@@ -138,12 +151,14 @@ class SchemaController {
 
                 if ($arrayType === 'object') {
                     // TODO this requires MM writes!
+//                    trigger_error("Cannot export object array for field.", E_USER_WARNING);
 
                 } else if ($arrayType === 'array') {
+//                    trigger_error("Cannot export nested array for field.", E_USER_WARNING);
 
                 } else {
                     $valuesEnc = array_map(function ($value) use ($arrayTypes) {
-                        return self::_exportFieldToDB($value, $arrayTypes);
+                        return self::_exportScalarToDB($value, $arrayTypes);
                     }, $fieldValue);
                     return implode('|', $valuesEnc);
                 }
@@ -154,7 +169,7 @@ class SchemaController {
                 return self::_exportScalarToDB($fieldValue, $varAnnotation);
         }
     }
-    private static function _exportFieldToDB($fieldValue, $varAnnotation) {
+    private static function _exportScalarToDB($fieldValue, $varAnnotation) {
         $simpleType = TypeUtil::getSimpleType($varAnnotation);
         switch ($simpleType) {
             case 'int':
@@ -231,8 +246,29 @@ class SchemaController {
                 break;
 
             case 'object':
-                // TODO implement foreign key lookup...
-                throw new InvalidAnnotationException("TODO implement foreign key lookup");
+                // foreign key lookup
+                $classes = $doc['var']['object'];
+
+                if (count($classes) == 0) {
+                    throw new InvalidAnnotationException("@$annotationKey - $table $field must specify object class.");
+                } else if ($classes['*']) {
+                    throw new InvalidAnnotationException("@$annotationKey - $table $field must specify object class.");
+                } else if (count($classes) > 1) {
+                    throw new InvalidAnnotationException("@$annotationKey - $table $field cannot specify multiple object classes.");
+                }
+
+                reset($classes);
+                $foreignClass = key($classes);
+
+                $foreignKey = ltrim(ClassRegistryUtils::findMemberWithRole($foreignClass, 'id'),'$');
+                $memberInfo = PersistenceDB::getMemberPersistenceInfo($foreignClass);
+                $foreignDoc = $memberInfo['persistent_fields'][$foreignKey];
+
+                // could add an automatic index on the field at ths stage
+
+                $ignored = []; // prevent keys being generated
+                $foreignDoc['role'] = []; // remove the 'id' role
+                return self::getSQLDeclaration($foreignDoc,'persist',$table,$field,$ignored);
                 break;
 
             case 'array':
@@ -268,11 +304,13 @@ class SchemaController {
                         $mmTableKeys[$reflectedField] = $reflectedField;
                     }
 
+                    throw new InvalidAnnotationException("TODO implement MM lookup");
+
                 } else if ($arrayType === 'array') {
                     throw new InvalidAnnotationException("@$annotationKey - $table $field cannot be multi-dimensional array.");
 
                 } else {
-                    // TODO implement literal array...
+                    // literal array is implemented as a large text field
                     $sqlType = self::stringFieldDBType($doc['persist'], false);
                 }
                 break;
@@ -625,5 +663,9 @@ class SchemaController {
 
     public static function tableOptions() {
         return "ENGINE=InnoDB DEFAULT CHARSET=".self::CHARSET." COLLATE=".self::COLLATION;
+    }
+
+    public static function getPrimaryKeyDeclaration($primary) {
+        return "PRIMARY KEY (`$primary`)";
     }
 }

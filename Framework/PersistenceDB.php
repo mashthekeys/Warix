@@ -147,12 +147,12 @@ class PersistenceDB {
 //            $exists = self::query("SHOW TABLES LIKE '$matchTable'")->num_rows;
 
             if ($checkStructure || !$exists) {
-                $primary = ltrim(ClassRegistryUtils::findMemberWithRole('id', $class),'$');
+                $primary = ltrim(ClassRegistryUtils::findMemberWithRole($class, 'id'),'$');
                 if (!strlen($primary)) {
                     throw new InvalidAnnotationException("@persist - $table HAS NO PRIMARY KEY\n");
                 }
 
-                $keys['PRIMARY KEY'] = $primary;
+                $keys['PRIMARY KEY'] = SchemaController::getPrimaryKeyDeclaration($primary);
 
                 foreach ($classInfo['foreign_fields'] as $field => $doc) {
                     $sqlType = SchemaController::getSQLDeclaration($field, 'persist', $table, $field, $keys);
@@ -173,6 +173,10 @@ class PersistenceDB {
                 }
 
                 $options = SchemaController::tableOptions();
+
+//                echo "<pre>\n";
+//                var_export(compact('table','fields','keys','options'));
+//                echo "</pre>\n";
 
                 if ($exists) {
                     SchemaController::alterTable($table, $fields, $keys, $options);
@@ -245,7 +249,7 @@ class PersistenceDB {
                             $persistent_fields[$fieldName] = $doc;
                         }
                     } else {
-                        $persistMembers[$member] = $memberDoc;
+                        $persistMembers[$member] = $doc;
                     }
                 }
             }
@@ -315,7 +319,7 @@ class PersistenceDB {
             throw new \InvalidArgumentException("$type ID cannot be ".gettype($id));
         }
 
-        $idField = ltrim(ClassRegistryUtils::findMemberWithRole('id', $type), '$');
+        $idField = ltrim(ClassRegistryUtils::findMemberWithRole($type, 'id'), '$');
         if (!strlen($idField)) {
             throw new \RuntimeException("Cannot find items of class $type by id.");
         }
@@ -379,7 +383,7 @@ class PersistenceDB {
         $foreign_fields = $info['foreign_fields'];
         $persistent_fields = $info['persistent_fields'];
         $sensitive_fields = $info['sensitive_fields'];
-        $idField = ltrim(ClassRegistryUtils::findMemberWithRole('id', $type),'$');
+        $idField = ltrim(ClassRegistryUtils::findMemberWithRole($type, 'id'),'$');
 
         $items = array();
         $lookup = array();
@@ -528,7 +532,7 @@ class PersistenceDB {
         }
 
         $update = array();
-        $idField = ltrim(ClassRegistryUtils::findMemberWithRole('id', $class),'$');
+        $idField = ltrim(ClassRegistryUtils::findMemberWithRole($class, 'id'),'$');
 
         foreach ($info['persistent_fields'] as $fieldName => $fieldDoc) {
             if (strlen($fieldDoc['persist']['onStore'])) {
@@ -639,7 +643,7 @@ class PersistenceDB {
             throw new PersistTypeException('Class is not persistent: '. $class);
         }
 
-        $idField = ltrim(ClassRegistryUtils::findMemberWithRole('id', $class),'$');
+        $idField = ltrim(ClassRegistryUtils::findMemberWithRole($class, 'id'),'$');
 
         if (!strlen($idField)) {
             throw new PersistTypeException('Class has no ID field: '. $class);

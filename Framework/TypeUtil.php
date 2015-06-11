@@ -14,6 +14,35 @@ class TypeUtil {
      * @param string|array $type
      * @return string
      */
+    public static function isScalar($type) {
+        if (count($type) == 0 || $type === '') return true;
+
+        if (is_array($type)) {
+            $possibleTypes = $type;
+        } else {
+//            throw new \ErrorException('Not a type spec: '.gettype($type));
+            $possibleTypes = self::parseVarAnnotation($type);
+        }
+
+        if ($possibleTypes['array']) return false;
+        if ($possibleTypes['object']) return false;
+
+        // mixed is assumed to represent a scalar type, unless object or array was specifically listed.
+//        if ($possibleTypes['mixed']) return 'mixed';
+//        if ($possibleTypes['string']) return 'string';
+//        if ($possibleTypes['float']) return 'float';
+//        if ($possibleTypes['int']) return 'int';
+//        if ($possibleTypes['bool']) return 'bool';
+//        if ($possibleTypes['null']) return 'null';
+
+        // Finally, if no type descriptor at all was given, return mixed.
+        return true;
+    }
+
+    /**
+     * @param string|array $type
+     * @return string
+     */
     public static function getSimpleType($type) {
         if (count($type) == 0 || $type === '') return 'mixed';
 

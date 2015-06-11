@@ -10,7 +10,7 @@ namespace Framework;
 
 
 class ClassRegistryUtils {
-    public static function findMemberWithRole($roleName, $class) {
+    public static function findMemberWithRole($class, $roleName) {
 //        $members = ClassRegistry::listAnnotatedMembers('role', $class);
 //
 //        foreach ($members as $fqMember) {
