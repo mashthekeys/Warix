@@ -8,7 +8,8 @@ use Framework\TimeStampedItem;
  * @Framework
  * @persist
  * @editorTemplate path,ext,lang,title,content,template,stamp_created,stamp_modified
- * @js testCode
+ * @js export
+ * @php export
  */
 class Page extends TimeStampedItem {
 

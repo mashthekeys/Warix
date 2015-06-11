@@ -3,6 +3,7 @@
 namespace Framework;
 
 use PhpParser\Node\Name;
+use PhpParser\PrettyPrinter\Standard;
 
 require_once __DIR__.'/lib/PHP-Parser/lib/bootstrap.php';
 
@@ -139,13 +140,24 @@ class ClassRegistry {
             //$e->getMessage();
         }
 
-        if (is_array($stmts) && $found && self::$classDoc["$namespace\\$className"]['js']['testCode']) {
-            $prettyPrinter = new JSConverter;
+        if (is_array($stmts) && $found) {
+            if (self::$classDoc["$namespace\\$className"]['js']['export']) {
+                $prettyPrinter = new JSConverter;
 
-            $nsFolder = self::$namespace[$namespace];
-            $outputFile = $nsFolder . DIRECTORY_SEPARATOR . $className . '_testCode.js';
+                $nsFolder = self::$namespace[$namespace];
+                $outputFile = $nsFolder . DIRECTORY_SEPARATOR . $className . '.export.js';
 
-            file_put_contents($outputFile, $prettyPrinter->prettyPrintFile($stmts));
+                file_put_contents($outputFile, $prettyPrinter->prettyPrintFile($stmts));
+            }
+
+            if (self::$classDoc["$namespace\\$className"]['php']['testCode']) {
+                $prettyPrinter = new Standard;
+
+                $nsFolder = self::$namespace[$namespace];
+                $outputFile = $nsFolder . DIRECTORY_SEPARATOR . $className . '.export.php';
+
+                file_put_contents($outputFile, $prettyPrinter->prettyPrintFile($stmts));
+            }
         }
 
         return $found;
