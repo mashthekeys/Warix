@@ -150,7 +150,7 @@ class ClassRegistry {
                 file_put_contents($outputFile, $prettyPrinter->prettyPrintFile($stmts));
             }
 
-            if (self::$classDoc["$namespace\\$className"]['php']['testCode']) {
+            if (self::$classDoc["$namespace\\$className"]['php']['export']) {
                 $prettyPrinter = new Standard;
 
                 $nsFolder = self::$namespace[$namespace];
