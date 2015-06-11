@@ -305,7 +305,7 @@ class Editor {
             throw new \InvalidArgumentException("Object selector cannot display non-persistent class '$class'");
         }
 
-        $idField = ltrim(ClassRegistryUtils::findMemberWithRole('id', $class), '$');
+        $idField = ltrim(ClassRegistryUtils::findMemberWithRole($class, 'id'), '$');
 
         return HTMLUtils::selectField($key, $value->$idField, array(
             'values' => self::makeSelectLabels($class),
@@ -315,8 +315,8 @@ class Editor {
 
     private static function makeSelectLabels($class) {
         $labels = array();
-        $idField = ltrim(ClassRegistryUtils::findMemberWithRole('id', $class), '$');
-        $nameField = ltrim(ClassRegistryUtils::findMemberWithRole('name', $class), '$');
+        $idField = ltrim(ClassRegistryUtils::findMemberWithRole($class, 'id'), '$');
+        $nameField = ltrim(ClassRegistryUtils::findMemberWithRole($class, 'name'), '$');
 
         foreach (PersistenceDB::findItems($class, Query::matchAll()) as $id => $item) {
             if (strlen($nameField)) {
@@ -339,8 +339,8 @@ class Editor {
     public static function objectLabel($value, $class = null) {
         if ($class !== null && is_object($value)) $class = get_class($value);
 
-        $idField = ltrim(ClassRegistryUtils::findMemberWithRole('id', $class), '$');
-        $nameField = ltrim(ClassRegistryUtils::findMemberWithRole('name', $class), '$');
+        $idField = ltrim(ClassRegistryUtils::findMemberWithRole($class, 'id'), '$');
+        $nameField = ltrim(ClassRegistryUtils::findMemberWithRole($class, 'name'), '$');
 
         if ($value instanceof $class) {
             if (strlen($nameField)) {

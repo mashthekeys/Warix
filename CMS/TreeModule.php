@@ -114,21 +114,21 @@ class TreeModule implements CMSModule
 
         foreach ($items as $item) {
 //            $idField = 'id';
-            $idField = ltrim(ClassRegistryUtils::findMemberWithRole('id',$moduleClass), '$');
+            $idField = ltrim(ClassRegistryUtils::findMemberWithRole($moduleClass, 'id'), '$');
 //            $id = $item->$idField;
 
-            $nameField = ltrim(ClassRegistryUtils::findMemberWithRole('name', $moduleClass), '$');
+            $nameField = ltrim(ClassRegistryUtils::findMemberWithRole($moduleClass, 'name'), '$');
             if (strlen($nameField)) {
                 $name = $item->$nameField;
             } else {
                 $name = $item->$idField;
             }
 
-            $urlField = ltrim(ClassRegistryUtils::findMemberWithRole('moduleUrl', $moduleClass), '$');
+            $urlField = ltrim(ClassRegistryUtils::findMemberWithRole($moduleClass, 'moduleUrl'), '$');
             if (strlen($urlField)) {
                 $url = $item->$urlField;
 
-                $urlSuffixField = ltrim(ClassRegistryUtils::findMemberWithRole('moduleUrlSuffix', $moduleClass), '$');
+                $urlSuffixField = ltrim(ClassRegistryUtils::findMemberWithRole($moduleClass, 'moduleUrlSuffix'), '$');
                 if (strlen($urlSuffixField)) {
                     $url .= $item->$urlSuffixField;
                 }

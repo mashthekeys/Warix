@@ -21,9 +21,9 @@ use Framework\StringUtil;
 class DBModule implements CMSModule {
 
     public static function getModuleUrl($dbClass, $item) {
-        $idField = ltrim(ClassRegistryUtils::findMemberWithRole('id', $dbClass), '$');
-        $moduleUrlField = ltrim(ClassRegistryUtils::findMemberWithRole('moduleUrl', $dbClass), '$');
-        $moduleUrlSuffixField = ltrim(ClassRegistryUtils::findMemberWithRole('moduleUrlSuffix', $dbClass), '$');
+        $idField = ltrim(ClassRegistryUtils::findMemberWithRole($dbClass, 'id'), '$');
+        $moduleUrlField = ltrim(ClassRegistryUtils::findMemberWithRole($dbClass, 'moduleUrl'), '$');
+        $moduleUrlSuffixField = ltrim(ClassRegistryUtils::findMemberWithRole($dbClass, 'moduleUrlSuffix'), '$');
 
         if (strlen($moduleUrlField)) {
             $moduleUrl = $item->$moduleUrlField;
@@ -50,9 +50,9 @@ class DBModule implements CMSModule {
      * @throws \ErrorException
      */
     static function loadByModuleUrl($dbClass, $moduleUrl) {
-        $idField = ltrim(ClassRegistryUtils::findMemberWithRole('id', $dbClass), '$');
-        $moduleUrlField = ltrim(ClassRegistryUtils::findMemberWithRole('moduleUrl', $dbClass), '$');
-        $moduleUrlSuffixField = ltrim(ClassRegistryUtils::findMemberWithRole('moduleUrlSuffix', $dbClass), '$');
+        $idField = ltrim(ClassRegistryUtils::findMemberWithRole($dbClass, 'id'), '$');
+        $moduleUrlField = ltrim(ClassRegistryUtils::findMemberWithRole($dbClass, 'moduleUrl'), '$');
+        $moduleUrlSuffixField = ltrim(ClassRegistryUtils::findMemberWithRole($dbClass, 'moduleUrlSuffix'), '$');
 
         if (strlen($moduleUrlField)) {
             if (strlen($moduleUrlSuffixField)) {
@@ -123,8 +123,8 @@ class DBModule implements CMSModule {
      * @throws \ErrorException
      */
     public static function renderEditorByModuleUrl($moduleCodename, $moduleClass, $moduleUrl) {
-        $urlField = ltrim(ClassRegistryUtils::findMemberWithRole('moduleUrl', $moduleClass), '$');
-        $urlSuffixField = ltrim(ClassRegistryUtils::findMemberWithRole('moduleUrlSuffix', $moduleClass), '$');
+        $urlField = ltrim(ClassRegistryUtils::findMemberWithRole($moduleClass, 'moduleUrl'), '$');
+        $urlSuffixField = ltrim(ClassRegistryUtils::findMemberWithRole($moduleClass, 'moduleUrlSuffix'), '$');
         $script = [];
 
         list($path,$ext) = URLUtil::pathSplit($moduleUrl);
@@ -153,12 +153,12 @@ class DBModule implements CMSModule {
 
             $item->$urlField = $path;
 
-            $nameField = ltrim(ClassRegistryUtils::findMemberWithRole('name', $moduleClass), '$');
+            $nameField = ltrim(ClassRegistryUtils::findMemberWithRole($moduleClass, 'name'), '$');
             if (strlen($nameField)) {
                 $item->$nameField = 'New ' . strtr($moduleClass, '\\', ' ');
             }
 
-            $langField = ltrim(ClassRegistryUtils::findMemberWithRole('lang', $moduleClass), '$');
+            $langField = ltrim(ClassRegistryUtils::findMemberWithRole($moduleClass, 'lang'), '$');
             if (strlen($langField)) {
                 $item->$langField = Config::get('site.lang');
             }
@@ -243,8 +243,8 @@ class DBModule implements CMSModule {
      * @return array
      */
     public function renderModuleUrl($moduleUrl) {
-        $idField = ltrim(ClassRegistryUtils::findMemberWithRole('id',$this->dbClass), '$');
-        $urlField = ltrim(ClassRegistryUtils::findMemberWithRole('moduleUrl', $this->dbClass), '$');
+        $idField = ltrim(ClassRegistryUtils::findMemberWithRole($this->dbClass, 'id'), '$');
+        $urlField = ltrim(ClassRegistryUtils::findMemberWithRole($this->dbClass, 'moduleUrl'), '$');
 
         $moduleCodename = array_search($this->dbClass, CMS::$modules);
 
@@ -253,7 +253,7 @@ class DBModule implements CMSModule {
         } else if (strlen($idField)) {
             $result = self::renderEditorByIdUrl($moduleCodename, $this->dbClass, $moduleUrl);
         } else {
-            throw new \RuntimeException("Cannot edit class without an id field");
+            throw new \RuntimeException("Cannot edit class $this->dbClass without an id field");
         }
         return $result;
     }
@@ -305,8 +305,8 @@ class DBModule implements CMSModule {
                         $dbClass = $this->dbClass;
                         $item = new $dbClass();
 
-                        $moduleUrlField = ltrim(ClassRegistryUtils::findMemberWithRole('moduleUrl', $dbClass));
-                        $moduleUrlSuffixField = ltrim(ClassRegistryUtils::findMemberWithRole('moduleUrlSuffix', $dbClass));
+                        $moduleUrlField = ltrim(ClassRegistryUtils::findMemberWithRole($dbClass, 'moduleUrl'));
+                        $moduleUrlSuffixField = ltrim(ClassRegistryUtils::findMemberWithRole($dbClass, 'moduleUrlSuffix'));
 
                         if (strlen($moduleUrlSuffixField)) {
                             list($path, $ext) = URLUtil::pathSplit($moduleUrl);
