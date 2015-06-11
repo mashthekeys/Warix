@@ -336,9 +336,9 @@ class DBModule implements CMSModule {
                             $write = $field;
                         }
 
-                        if ($field === 'template' && !$value) {
-                            $validationProblems[$field] = "$field / $write = '$value' ".gettype($value);
-                        }
+//                        if ($field === 'template' && !$value) {
+//                            $validationProblems[$field] = "$field / $write = '$value' ".gettype($value);
+//                        }
 
                         if ($validation === null) {
                             $item->$write = $value;

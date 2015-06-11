@@ -126,7 +126,7 @@ class Editor {
 
         $simpleType = TypeUtil::getSimpleType($type);
 
-        if ($idProxyAnnotations) {
+        if ($type['object']) {
             $field = self::_objectSelector($label, $value, $key, $annotations, $context, $idProxyAnnotations, $scriptParts);
 
         } else if ($content['date']) {
@@ -261,18 +261,32 @@ class Editor {
         return $label;
     }
 
-    public static function parseUserInput($data, $field, $doc, $idProxyDoc = null) {
-        // TODO!!!!!!!
+    public static function parseUserInput($data, $field, $annotations, $idProxyDoc = null) {
+//        Log::recordEvent('Debug input',$field,$annotations);
 
         $input = $data['editor'][$field];
 
         $value = null;
 
-        if (!isset($input)) {
-            $validation = 'Value missing from input';
-        } else if (!is_scalar($input)) {
-            $validation = 'Value supplied as ' . gettype($input);
+        if ($annotations['var']['object']) {
+            $classes = array_keys($annotations['var']['object']);
+            $class = reset($classes);
+
+            if (empty($class)) {
+                throw new \InvalidArgumentException("Object selector cannot display non-existent class '$class'");
+            } else if (!PersistenceDB::getClassPersistenceInfo($class)) {
+                throw new \InvalidArgumentException("Object selector cannot display non-persistent class '$class'");
+            }
+
+            $value = PersistenceDB::findById($class,$input);
+            $validation = null;
         } else {
+//
+//        if (!isset($input)) {
+//            $validation = 'Value missing from input';
+//        } else if (!is_scalar($input)) {
+//            $validation = 'Value supplied as ' . gettype($input);
+//        } else {
             $value = $input;
             $validation = null;
         }
