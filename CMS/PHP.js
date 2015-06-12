@@ -2,8 +2,8 @@ PHP = (function() {
     if (window.PHP) return PHP;
 
     // unique internal markers to signal class definition
-    var _DECLARE_CLASS = new (function(){});
-    var _DECLARE_SUBCLASS = new (function(){});
+    var __DECLARE_CLASS__ = new (function(){});
+    var __DECLARE_SUBCLASS__ = new (function(){});
 
     var PHP_OBJECT = function(){};
 
@@ -15,7 +15,7 @@ PHP = (function() {
 
         // The function below is run to construct instance objects and to define subclass prototypes
         var CONSTRUCTOR = function() {
-            if (arguments.length && arguments[0] === _DECLARE_SUBCLASS) {
+            if (arguments.length && arguments[0] === __DECLARE_SUBCLASS__) {
                 // No PHP code should be run; this call is to declare
                 // JS inheritance.
             } else {
@@ -30,7 +30,7 @@ PHP = (function() {
         if (superclassObj == null) {
             CONSTRUCTOR.prototype = new PHP_OBJECT();
         } else {
-            CONSTRUCTOR.prototype = new superclassObj(_DECLARE_SUBCLASS);
+            CONSTRUCTOR.prototype = new superclassObj(__DECLARE_SUBCLASS__);
         }
         CONSTRUCTOR.prototype.constructor = CONSTRUCTOR;
 
@@ -61,7 +61,7 @@ PHP = (function() {
             var fqName = nsObject.name + '\\' + _class;
 
             var classObj = function() {
-                if (arguments.length && arguments[0] === _DECLARE_SUBCLASS) {
+                if (arguments.length && arguments[0] === __DECLARE_SUBCLASS__) {
                     // No PHP code should be run; this call is to declare
                     // JS inheritance.
                 } else if (typeof this.__construct === 'function') {
@@ -79,7 +79,7 @@ PHP = (function() {
             classObj.PHP_IMPLEMENTS = _implements == null || !_implements.length ? null : [].concat(_implements);
 
             if (superclassObj != null) {
-                classObj.prototype = new superclassObj(_DECLARE_SUBCLASS);
+                classObj.prototype = new superclassObj(__DECLARE_SUBCLASS__);
                 classObj.prototype.constructor = classObj;
             }
 
@@ -186,14 +186,21 @@ PHP = (function() {
         isPHPArray: function(a) {
             return a instanceof PHP_ARRAY;
         },
+        isPHPObject: function(a) {
+            return a instanceof PHP_OBJECT;
+        },
         array: function() {
             var phpArray = new PHP_ARRAY();
-            phpArray.__push.apply(phpArray, arguments);
+            if (arguments.length) phpArray.__push.apply(phpArray, arguments);
             return phpArray;
         },
         foreach: function(traversable, callback) {
-            // should really take a copy of the object before running code over it!
-            var n, N, keys, values, key, retVal;
+            // PHP.foreach($array) :- Returns an iterator supporting current, key, next and hasNext
+            // PHP.foreach($array, $callback) :- Iterates through callback
+            var useIterator = arguments.length < 2;
+
+            var n, N, keys, values, key, setFn, retVal;
+
             if (traversable == null || typeof traversable !== 'object') {
                 // Ignore non-array values, as PHP would.
                 keys = values = [];
@@ -234,32 +241,34 @@ PHP = (function() {
                 }
             }
 
-            if (arguments.length > 1) {
-                // PHP.foreach($array, $callback)
-                // iterates through callback
-                N = values.length;
-
-                for (n = 0; n < N; ++n) {
-                    retVal = callback(keys[n], values[n]);
-                }
-            } else {
-                // PHP.foreach($array)
-                // returns a basic iterator
-                // TODO PHP.jsIterator($array)
-                return (function(keys, values, length){
+            if (useIterator) {
+                return (function (keys, values, length) {
                     var pos = 0;
 
-                    this.current = function(){
+                    this.current = function () {
                         return values[pos];
                     };
-                    this.key = function(){
+                    this.next = function () {
+                        return values[++pos];
+                    };
+                    this.key = function () {
                         return keys[pos];
                     };
-                    this.hasNext = function(){
+                    this.hasNext = function () {
                         return pos < length;
                     };
                     return this;
                 })(keys, values, N);
+            } else {
+                N = values.length;
+                
+                if (typeof callback !== 'function') {
+                    callback = PHP.__lookup_user_func(callback);
+                }
+
+                for (n = 0; n < N; ++n) {
+                    retVal = callback(keys[n], values[n]);
+                }
             }
         },
 
@@ -296,6 +305,7 @@ PHP = (function() {
 //                return GLOBAL_NS.class(_class, _extends, _implements);
 //            });
         },
+        
         /**
          * @jsOnly
          */

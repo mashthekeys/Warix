@@ -20,6 +20,9 @@ class JSConverter extends PrettyPrinterAbstract
 
     protected $stack = [];
 
+    const NAMESPACE_OBJECT = 'NAMESPACE';
+    const CLASS_OBJECT = 'CLASS';
+
     private function addToStack($context) {
         $stackId = count($this->stack);
         $this->stack[$stackId] = $context;
@@ -45,15 +48,12 @@ class JSConverter extends PrettyPrinterAbstract
             'type' => 'JSConverter',
             '__FILE__' => $__FILE__,
         );
-//        $stackId = $this->addToStack($context);
 
         $this->preprocessNodes($stmts);
 
         $output = ltrim(str_replace("\n" . $this->noIndentToken, "\n",
             $this->pContext($stmts, false, $context)
         ));
-
-//        $this->dropStack($stackId);
 
         return $output;
     }
@@ -97,9 +97,21 @@ class JSConverter extends PrettyPrinterAbstract
     protected function pContext(array $nodes, $indent = true, array $context) {
         $stackId = $this->addToStack($context);
 
+        $outerScope = $this->codeGen_varList;
+        $this->codeGen_varList = [];
+
         $output = $this->pStmts($nodes, $indent);
 
         $this->dropStack($stackId);
+
+        if (count($this->codeGen_varList)) {
+            $vars = implode(', ', array_keys($this->codeGen_varList));
+            $output = "\n    var $vars;$output";
+//            $vars = var_export($this->codeGen_varList,1);
+//            $output = "/*AUTO VARS*/\nvar $vars;\n/*AUTO VARS*/\n$output";
+        }
+
+        $this->codeGen_varList = $outerScope;
 
         return $output;
     }
@@ -243,20 +255,24 @@ class JSConverter extends PrettyPrinterAbstract
         $floatValue = (float) $node->value;
 
         return json_encode($floatValue, JSON_UNESCAPED_SLASHES);
-
-//        $stringValue = (string) $node->value;
-//        // ensure that number is really printed as float
-//        return preg_match('/^-?[0-9]+$/', $stringValue) ? $stringValue . '.0' : $stringValue;
     }
 
     // Assignments
 
     public function pExpr_Assign(Expr\Assign $node) {
+        if (self::isPlainVariable($node->var)) {
+            $this->registerScopeVariable($node->var);
+        }
+
         return $this->pInfixOp('Expr_Assign', $node->var, ' = ', $node->expr);
     }
 
     public function pExpr_AssignRef(Expr\AssignRef $node) {
-        trigger_error("Assignment by reference is not supported in the JS Converter.", E_USER_ERROR);
+        trigger_error("Assignment by reference is not supported in the JS Converter.", E_USER_NOTICE);
+
+        if (self::isPlainVariable($node->var)) {
+            $this->registerScopeVariable($node->var);
+        }
 
         return $this->pInfixOp('Expr_AssignRef', $node->var, ' = ', $node->expr);
     }
@@ -306,8 +322,15 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pExpr_AssignOp_Pow(AssignOp\Pow $node) {
-        // TODO Math.pow()
-//        return $this->pInfixOp('Expr_AssignOp_Pow', $node->var, ' **= ', $node->expr);
+        list($precedence, $associativity) = $this->precedenceMap['Expr_AssignOp_Pow'];
+
+        return $this->pPrec($node->var, $precedence, $associativity, -1)
+             . ' = '
+             . 'Math.pow(PHP.toFloat('
+                . $this->p($node->var)
+                . '), PHP.toFloat('
+                . $this->p($node->expr)
+             . '))';
     }
 
     // Binary expressions
@@ -450,14 +473,21 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pExpr_PostInc(Expr\PostInc $node) {
+        if (self::isPlainVariable($node->var)) {
+            $this->registerScopeVariable($node->var);
+        }
         return $this->pPostfixOp('Expr_PostInc', $node->var, '++');
     }
 
     public function pExpr_PostDec(Expr\PostDec $node) {
+        if (self::isPlainVariable($node->var)) {
+            $this->registerScopeVariable($node->var);
+        }
         return $this->pPostfixOp('Expr_PostDec', $node->var, '--');
     }
 
     public function pExpr_ErrorSuppress(Expr\ErrorSuppress $node) {
+        // not supported
         return '';
 //        return $this->pPrefixOp('Expr_ErrorSuppress', '@', $node->expr);
     }
@@ -495,7 +525,7 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pExpr_Cast_Unset(Cast\Unset_ $node) {
-        return 'PHP.toUnset('.$this->p($node->expr).')';
+        return 'void('.$this->p($node->expr).')';
 //        return $this->pPrefixOp('Expr_Cast_Unset', '(unset) ', $node->expr);
     }
 
@@ -506,7 +536,7 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pExpr_MethodCall(Expr\MethodCall $node) {
-        return $this->pVarOrNewExpr($node->var) . '.' . $this->pObjectProperty($node->name)
+        return $this->pVarOrNewExpr($node->var) . $this->pArrowObjectMethod($node->name)
              . '(' . $this->pCommaSeparated($node->args) . ')';
     }
 
@@ -534,6 +564,7 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pExpr_Eval(Expr\Eval_ $node) {
+        // not supported
 //        return 'eval(' . $this->p($node->expr) . ')';
     }
 
@@ -559,6 +590,7 @@ class JSConverter extends PrettyPrinterAbstract
         }
 
         // TODO
+        // not currently supported
 
         return 'list(' . implode(', ', $pList) . ')';
     }
@@ -566,11 +598,14 @@ class JSConverter extends PrettyPrinterAbstract
     // Other
 
     public function pExpr_Variable(Expr\Variable $node) {
-        if ($node->name instanceof Expr) {
+        $name = $node->name;
+        if ($name instanceof Expr) {
             // TODO
 //            return '${' . $this->p($node->name) . '}';
+        } else if ($name === 'this') {
+            return 'this';
         } else {
-            return '$' . $node->name;
+            return '$' . $name;
         }
     }
 
@@ -600,21 +635,22 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pExpr_ClassConstFetch(Expr\ClassConstFetch $node) {
-        return 'PHP_CF2["'.$this->p($node->class).'"].CONST.' . $node->name;
+        return 'PHP.classDefinition["'.$this->p($node->class).'"].' . $node->name;
 //        return $this->p($node->class) . '::' . $node->name;
     }
 
     public function pExpr_PropertyFetch(Expr\PropertyFetch $node) {
-        return $this->pVarOrNewExpr($node->var) . '.$' . $this->pObjectProperty($node->name);
+        return $this->pVarOrNewExpr($node->var) . $this->pArrowObjectProperty($node->name);
 //        return $this->pVarOrNewExpr($node->var) . '->' . $this->pObjectProperty($node->name);
     }
 
     public function pExpr_StaticPropertyFetch(Expr\StaticPropertyFetch $node) {
-        return $this->p($node->class) . '.$' . $this->pObjectProperty($node->name);
+        return $this->p($node->class) . $this->pArrowObjectProperty($node->name);
     }
 
     public function pExpr_ShellExec(Expr\ShellExec $node) {
         // not supported
+        return 'void(0)';
 //        return '`' . $this->pEncapsList($node->parts, '`') . '`';
     }
 
@@ -677,7 +713,7 @@ class JSConverter extends PrettyPrinterAbstract
         $fqNS = null !== $node->name ? $this->p($node->name) : '\\\\';
 
 //        $nsObjName = null !== $node->name ? strtr($this->p($node->name),'\\','_') : 'GLOBAL_NS';
-        $nsObjName = '__NS_OBJECT__';
+        $nsObjName = self::NAMESPACE_OBJECT;
 
         $context = array(
             'type' => 'namespace',
@@ -726,9 +762,9 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pStmt_Class(Stmt\Class_ $node) {
-        $nsObjName = '__NS_OBJECT__';
+        $nsObjName = self::NAMESPACE_OBJECT;
 
-        $name = '__CLASS_OBJECT__';
+        $name = self::CLASS_OBJECT;
 //        $name = (string) $node->name;
 
         $args = '"'.$node->name.'"';
@@ -789,7 +825,7 @@ class JSConverter extends PrettyPrinterAbstract
         $output = '';
 
         if ($node->isPublic()) {
-            $destination = $node->isStatic() ? '__CLASS_OBJECT__' : '__CLASS_OBJECT__.prototype';
+            $destination = $node->isStatic() ? self::CLASS_OBJECT : self::CLASS_OBJECT.'.prototype';
 
             foreach ($node->props as $prop) {
                 /** @var Stmt\PropertyProperty $prop */
@@ -811,7 +847,7 @@ class JSConverter extends PrettyPrinterAbstract
 
     public function pStmt_ClassMethod(Stmt\ClassMethod $node) {
         if ($node->isPublic()) {
-            $destination = $node->isStatic() ? '__CLASS_OBJECT__' : '__CLASS_OBJECT__.prototype';
+            $destination = $node->isStatic() ? self::CLASS_OBJECT : self::CLASS_OBJECT.'.prototype';
 
             $fqNS = $this->context__NAMESPACE__();
             $fqClass = $this->context__CLASS__();
@@ -848,7 +884,7 @@ class JSConverter extends PrettyPrinterAbstract
 
     public function pStmt_ClassConst(Stmt\ClassConst $node) {
         $output = '';
-        $destination = '__CLASS_OBJECT__';
+        $destination = self::CLASS_OBJECT;
         foreach ($node->consts as $const) {
             /** @var Node\Const_ $const */
             $output .= $destination . '.' . $const->name . ' = ' . $this->p($const->value) . ";\n";
@@ -864,7 +900,8 @@ class JSConverter extends PrettyPrinterAbstract
             '__FUNCTION__' => $node->name,
         );
 
-        return 'function ' . ($node->byRef ? '&' : '') . $node->name
+        return 'function ' //. ($node->byRef ? '&' : '')
+             . $node->name
              . '(' . $this->pCommaSeparated($node->params) . ')'
              . "\n" . '{' . $this->pContext($node->stmts, true, $context) . "\n" . '}';
     }
@@ -910,15 +947,36 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pStmt_Foreach(Stmt\Foreach_ $node) {
-        $context = array(
-            'type' => 'foreach',
-        );
+        $usesBreakContinueOrReturn = true;
 
+        if ($usesBreakContinueOrReturn) {
+            // if contained statements utilise continue, break or return,
+            // use a for loop with an array iterator
+            $it = $this->codeGen_nextIterator();
 
-        return 'PHP.foreach(' . $this->p($node->expr) . ', function('
-             . (null !== $node->keyVar ? $this->p($node->keyVar) . ', ' : '__unused__, ')
-             . $this->p($node->valueVar) . ') {'
-             . $this->pContext($node->stmts, true, $context) . "\n" . '});';
+            $assign = "$it = PHP.foreach(" . $this->p($node->expr) . "), "
+                    . (null !== $node->keyVar
+                        ? $this->p($node->keyVar) . " = $it.key(), "
+                        : '')
+                    . $this->p($node->valueVar) . " = $it.current()";
+
+            $update = $this->p($node->valueVar) . " = $it.next()"
+                    . (null !== $node->keyVar
+                        ? ', ' . $this->p($node->keyVar) . " = $it.key()"
+                        : '');
+
+            return "for (var $assign; $it.hasNext(); $update)\n{"
+                 . $this->pStmts($node->stmts)
+                 . "\n}";
+        } else {
+            // convert non-breaking foreach loops to closures
+            return 'PHP.foreach(' . $this->p($node->expr) . ', function('
+            . (null !== $node->keyVar ? $this->p($node->keyVar) . ', ' : '__unused__, ')
+            . $this->p($node->valueVar) . ') {'
+            . $this->pContext($node->stmts, true, ['type' => 'foreach_closure'])
+            . "\n});";
+        }
+
 //        return 'foreach (' . $this->p($node->expr) . ' as '
 //             . (null !== $node->keyVar ? $this->p($node->keyVar) . ' => ' : '')
 //             . ($node->byRef ? '&' : '') . $this->p($node->valueVar) . ') {'
@@ -963,14 +1021,14 @@ class JSConverter extends PrettyPrinterAbstract
 
     public function pStmt_Break(Stmt\Break_ $node) {
         $levels = $this->parseBreakOrContinueDepth($node);
-        return $this->breakFromContext($levels) . ';';
+        return 'break' . ($levels > 1 ? " $levels" : '') . ';';
 
 //        return 'break' . ($node->num !== null ? ' ' . $this->p($node->num) : '') . ';';
     }
 
     public function pStmt_Continue(Stmt\Continue_ $node) {
         $levels = $this->parseBreakOrContinueDepth($node);
-        return $this->continueFromContext($levels) . ';';
+        return 'continue' . ($levels > 1 ? " $levels" : '') . ';';
 
 //        return 'continue' . ($node->num !== null ? ' ' . $this->p($node->num) : '') . ';';
     }
@@ -1021,16 +1079,13 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pStmt_InlineHTML(Stmt\InlineHTML $node) {
-        $htmlAsJS = json_encode((string)$node->value,  JSON_UNESCAPED_SLASHES);
+        $lines = explode("\n", (string)$node->value);
 
+        $lines = array_map(function($line) {
+            return json_encode($line,  JSON_UNESCAPED_SLASHES);
+        }, $lines);
 
-        $replace = '$0"' . "\n" . $this->noIndentToken . '+"';
-
-
-
-        $htmlAsJS = preg_replace('~(?!<\\)(?:\\)*\\n~', $replace, $htmlAsJS);
-
-        return 'PHP.__inlineHTML(' . $htmlAsJS . ');';
+        return "PHP.inlinePrint(\n$this->noIndentToken" . implode("\n$this->noIndentToken+", $lines) . "\n);";
 
     }
 
@@ -1039,13 +1094,19 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     // Helpers
-
-    public function pObjectProperty($node) {
+    public function pArrowObjectMethod($node) {
         if ($node instanceof Expr) {
-            // TODO dynamic props
-            return '{' . $this->p($node) . '}';
+            return '[' . $this->p($node) . ']';
         } else {
-            return $node;
+            return ".$node";
+        }
+    }
+
+    public function pArrowObjectProperty($node) {
+        if ($node instanceof Expr) {
+            return '["$"+' . $this->p($node) . ']';
+        } else {
+            return '.$' . $node;
         }
     }
 
@@ -1093,96 +1154,18 @@ class JSConverter extends PrettyPrinterAbstract
         }
     }
 
-    public function breakFromContext($levels) {
-        // TODO
-        return 'break '.$levels;
+    private $codeGen_varList = [];
+    private $_codeGen_lastIterator = -1;
+    private function codeGen_nextIterator() {
+        $value = ++$this->_codeGen_lastIterator;
+        return 'it'.strtoupper(base_convert($value, 10, 36));
     }
-    public function continueFromContext($levels) {
 
-        // TODO for, while, do and switch must also set context, if this is to work!
-
-        // continue => continue
-        // continue continue continue => continue 3
-        // return => return
-        // continue continue return => return
-        // continue return continue => ERROR cannot continue 3 due to foreach
-
-        $continue = 0;
-        $return = false;
-        $stackId = count($this->stack) - 1;
-        $origLevels = $levels;
-
-        while ($levels > 0) {
-
-            $context = $this->stack[$stackId];
-            $type = $context['type'];
-
-            if ($type === 'do' || $type === 'for' || $type === 'while' || $type === 'switch') {
-                if ($return) {
-                    trigger_error("Cannot convert 'continue $origLevels' due to foreach", E_USER_ERROR);
-                }
-
-                ++$continue;
-
-            } else if ($type === 'foreach') {
-                // The closure function the JSConverter uses to implement foreach
-                // means that continue and break must be replaced by return;
-                $return = true;
-
-            } else {
-                trigger_error('Cannot continue out of context type "$context[type]"', E_USER_ERROR);
-            }
-
-            --$stackId;
-            --$levels;
-        }
-
-        if ($return) {
-            return 'return';
-        } else if ($continue > 1) {
-            return 'continue ' . $continue;
-        } else {
-            return 'continue';
-        }
+    public static function isPlainVariable(Expr $node) {
+        return $node instanceof Expr\Variable && !($node->name instanceof Expr);
     }
-    public function returnFromContext() {
-        // cannot return from within a foreach loop yet - will need to wrap vars for return otherwise
-        $continue = 0;
-        $return = false;
-        $stackId = count($this->stack) - 1;
-        $origLevels = $levels;
 
-        while ($levels > 0) {
-
-            $context = $this->stack[$stackId];
-            $type = $context['type'];
-
-            if ($type === 'do' || $type === 'for' || $type === 'while' || $type === 'switch') {
-                if ($return) {
-                    trigger_error("Cannot convert 'continue $origLevels' due to foreach", E_USER_ERROR);
-                }
-
-                ++$continue;
-
-            } else if ($type === 'foreach') {
-                // The closure function the JSConverter uses to implement foreach
-                // means that continue and break must be replaced by return;
-                $return = true;
-
-            } else {
-                trigger_error('Cannot continue out of context type "$context[type]"', E_USER_ERROR);
-            }
-
-            --$stackId;
-            --$levels;
-        }
-
-        if ($return) {
-            return 'return';
-        } else if ($continue > 1) {
-            return 'continue ' . $continue;
-        } else {
-            return 'continue';
-        }
+    public function registerScopeVariable(Expr $node) {
+        $this->codeGen_varList['$'.$node->name] = true;
     }
 }
