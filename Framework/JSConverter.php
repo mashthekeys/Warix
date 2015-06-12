@@ -20,8 +20,8 @@ class JSConverter extends PrettyPrinterAbstract
 
     protected $stack = [];
 
-    const NAMESPACE_OBJECT = 'NAMESPACE';
-    const CLASS_OBJECT = 'CLASS';
+    const NAMESPACE_OBJECT = 'namespace';
+    const CLASS_OBJECT = 'self';
 
     private function addToStack($context) {
         $stackId = count($this->stack);
@@ -138,21 +138,41 @@ class JSConverter extends PrettyPrinterAbstract
 
     // Names
 
+    private static $PHP_KEYWORDS = ['null','true','false'];
+
     public function pName(Name $node) {
-        return implode('\\', $node->parts);
+        $class = $node->toString('.');
+
+        if ($class === self::CLASS_OBJECT || $class === self::context__CLASS_VAR__()) {
+            // leave as is
+        } else if (in_array(strtolower($class), self::$PHP_KEYWORDS)) {
+            // leave as is
+        } else {
+            $__USE_VARS__ = $this->context__USE_VARS__();
+            if (is_array($__USE_VARS__) && in_array($class, array_keys($__USE_VARS__))) {
+                // leave as is
+            } else {
+                $class = self::NAMESPACE_OBJECT . '.' . $class;
+            }
+        }
+        return $class;
+//        return implode('.', $node->parts);
     }
 
-    public function pName_PHPFullyQualified(Name $node) {
-        return 'PHP_FQ["' . implode('\\\\', $node->parts) . '"]';
-    }
+//    public function pName_PHPFullyQualified(Name $node) {
+//        return 'PHP["\\\\' . implode('\\\\', $node->parts) . '"]';
+//    }
 
-    public function pName_FullyQualified(Name\FullyQualified $node) {
-        return 'PHP_FQN["' . implode('\\\\', $node->parts) . '"]';
+    public function pName_FullyQualified(Name $node) {
+//    public function pName_FullyQualified(Name\FullyQualified $node) {
+        return 'PHP['.json_encode("\\$node").']';
+//        return 'PHP["\\\\' . implode('\\\\', $node->parts) . '"]';
 //        return '\\' . implode('\\', $node->parts);
     }
 
     public function pName_Relative(Name\Relative $node) {
-        return '__NS_OBJECT__.' . implode('.', $node->parts);
+        return self::NAMESPACE_OBJECT . '.' . $node->toString('.');
+//        return self::NAMESPACE_OBJECT .'.' . implode('.', $node->parts);
     }
 
     // Magic Constants
@@ -173,12 +193,26 @@ class JSConverter extends PrettyPrinterAbstract
         return '';
     }
 
+    public function contextSet($key, $value) {
+        $stackId = count($this->stack) - 1;
+        $this->stack[$stackId][$key] = $value;
+    }
+
+    public function context__USE_VARS__() {
+        return $this->contextSearch('__USE_VARS__');
+    }
+
+    public function context__CLASS_VAR__() {
+        return $this->contextSearch('__CLASS_VAR__');
+    }
+
     public function context__CLASS__() {
         return $this->contextSearch('__CLASS__');
     }
 
     public function pScalar_MagicConst_Class(MagicConst\Class_ $node) {
-        return $this->contextSearch('__CLASS__');
+        return '__CLASS__';
+//        return json_encode($this->contextSearch('__CLASS__'));
     }
 
     public function context__DIR__() {
@@ -443,7 +477,7 @@ class JSConverter extends PrettyPrinterAbstract
 
     public function pExpr_Instanceof(Expr\Instanceof_ $node) {
         // interfaces not supported
-        return $this->pInfixOp('Expr_Instanceof', $node->expr, ' instanceof PHP.classDefinition(', $node->class).')';
+        return $this->pInfixOp('Expr_Instanceof', $node->expr, ' instanceof ', $node->class);
     }
 
     // Unary expressions
@@ -532,7 +566,12 @@ class JSConverter extends PrettyPrinterAbstract
     // Function calls and similar constructs
 
     public function pExpr_FuncCall(Expr\FuncCall $node) {
-        return 'PHP.' . $this->p($node->name) . '(' . $this->pCommaSeparated($node->args) . ')';
+        if ($node->name instanceof Name) {
+            $name = 'PHP.' . $node->name->toString('!!!');
+        } else {
+            $name = 'PHP[' . $this->p($node->name) . ']';
+        }
+        return $name . '(' . $this->pCommaSeparated($node->args) . ')';
     }
 
     public function pExpr_MethodCall(Expr\MethodCall $node) {
@@ -635,7 +674,7 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pExpr_ClassConstFetch(Expr\ClassConstFetch $node) {
-        return 'PHP.classDefinition["'.$this->p($node->class).'"].' . $node->name;
+        return 'PHP>>>>>>>>>["'.$this->p($node->class).'"].' . $node->name;
 //        return $this->p($node->class) . '::' . $node->name;
     }
 
@@ -675,7 +714,44 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pExpr_New(Expr\New_ $node) {
-        return 'new PHP["' . $this->p($node->class) . '"](' . $this->pCommaSeparated($node->args) . ')';
+
+        $classNode = $node->class;
+
+        if ($classNode instanceof Name) {
+            if ($classNode instanceof Name\FullyQualified) {
+                $class = 'PHP['.json_encode("\\$classNode").']';
+            } else if ($classNode instanceof Name\Relative) {
+//                $class = self::NAMESPACE_OBJECT . '.' . implode('.', $classNode->parts);
+                $class = (string)$classNode;
+                $class = self::NAMESPACE_OBJECT . '.' . strtr($class,'\\','.');
+            } else {
+                $class = (string)$classNode;
+                if ($class === self::CLASS_OBJECT || $class === self::context__CLASS_VAR__()) {
+                    // leave as is
+//                    $class = '__CLASS['.json_encode("\\$classNode").']';
+                } else {
+                    $__USE_VARS__ = $this->context__USE_VARS__();
+                    if (is_array($__USE_VARS__) && in_array($class, array_keys($__USE_VARS__))) {
+                        // leave as is
+//                        $class = '__USE['.json_encode("\\$classNode").']';
+                    } else {
+                        $class = self::NAMESPACE_OBJECT . '.' . strtr($class,'\\','.');
+                    }
+                }
+            }
+
+            $class = $this->p($classNode);
+        } else {
+            $class = '(' . self::NAMESPACE_OBJECT . '.resolveClass(' . $this->p($classNode) . '))';
+        }
+
+//        if ($class !== self::CLASS_OBJECT) {
+//            $class = $classNode->getType().'_PHP['.json_encode((string)$class).']';
+//        }
+
+        $args = $this->pCommaSeparated($node->args);
+
+        return "new $class($args)";
     }
 
     public function pExpr_Clone(Expr\Clone_ $node) {
@@ -710,7 +786,7 @@ class JSConverter extends PrettyPrinterAbstract
     // Declarations
 
     public function pStmt_Namespace(Stmt\Namespace_ $node) {
-        $fqNS = null !== $node->name ? $this->p($node->name) : '\\\\';
+        $fqNS = null !== $node->name ? (string)$node->name : '\\\\';
 
 //        $nsObjName = null !== $node->name ? strtr($this->p($node->name),'\\','_') : 'GLOBAL_NS';
         $nsObjName = self::NAMESPACE_OBJECT;
@@ -733,12 +809,17 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pStmt_Use(Stmt\Use_ $node) {
+        $uses = [];
 
         $pNodes = array();
         foreach ($node->uses as $use) {
             /** @var UseUse $use */
             $pNodes[] = $this->pStmt_UseUse($use);
+
+            $uses["$use->alias"] = true;//"$node->name";
         }
+
+        $this->contextSet('__USE_VARS__',$uses);
 
         return 'var ' . implode(",\n", $pNodes) . ';';
 
@@ -749,7 +830,7 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pStmt_UseUse(Stmt\UseUse $node) {
-        return $node->alias . ' = ' . $this->pName_PHPFullyQualified($node->name);
+        return $node->alias . ' = ' . $this->pName_FullyQualified($node->name);
 //        return $this->p($node->name)
 //             . ($node->name->getLast() !== $node->alias ? ' as ' . $node->alias : '');
     }
@@ -764,10 +845,10 @@ class JSConverter extends PrettyPrinterAbstract
     public function pStmt_Class(Stmt\Class_ $node) {
         $nsObjName = self::NAMESPACE_OBJECT;
 
-        $name = self::CLASS_OBJECT;
-//        $name = (string) $node->name;
+//        $name = self::CLASS_OBJECT;
+        $name = (string) $node->name;
 
-        $args = '"'.$node->name.'"';
+        $args = $classNameJS = json_encode((string)$node->name, JSON_UNESCAPED_SLASHES);
 
         if ($node->extends !== null) {
             $args .= ', ' . $this->p($node->extends);
@@ -776,20 +857,21 @@ class JSConverter extends PrettyPrinterAbstract
         }
 
         if (!empty($node->implements)) {
-            $args .= '[' . $this->pCommaSeparated($node->implements) . ']';
+            $args .= ', [' . $this->pCommaSeparated($node->implements) . ']';
         }
 
         $fqNS = $this->context__NAMESPACE__();
-        $fqClass = $fqNS ? $node->name : "$fqNS\\$node->name";
+        $fqClass = !$fqNS ? $node->name : "$fqNS\\$node->name";
 
         $context = array(
             'type' => 'class',
             '__NAMESPACE__' => $fqNS,
             '__CLASS__' => $fqClass,
+            '__CLASS_VAR__' => $name,
         );
 
-        return "var $name = $nsObjName.class($args);\n"
-             . $this->pContext($node->stmts, false, $context) . "\n";
+        return "var $name = $nsObjName.class($args, function(self,parent,__CLASS__) {\n"
+             . $this->pContext($node->stmts, true, $context) . "\n});\n";
     }
 
     public function pStmt_Trait(Stmt\Trait_ $node) {
@@ -825,7 +907,8 @@ class JSConverter extends PrettyPrinterAbstract
         $output = '';
 
         if ($node->isPublic()) {
-            $destination = $node->isStatic() ? self::CLASS_OBJECT : self::CLASS_OBJECT.'.prototype';
+//            $destination = $node->isStatic() ? self::CLASS_OBJECT : self::CLASS_OBJECT.'.prototype';
+            $destination = $this->context__CLASS_VAR__() . ($node->isStatic() ? '' : '.prototype');
 
             foreach ($node->props as $prop) {
                 /** @var Stmt\PropertyProperty $prop */
@@ -847,7 +930,8 @@ class JSConverter extends PrettyPrinterAbstract
 
     public function pStmt_ClassMethod(Stmt\ClassMethod $node) {
         if ($node->isPublic()) {
-            $destination = $node->isStatic() ? self::CLASS_OBJECT : self::CLASS_OBJECT.'.prototype';
+//            $destination = $node->isStatic() ? self::CLASS_OBJECT : self::CLASS_OBJECT.'.prototype';
+            $destination = $this->context__CLASS_VAR__() . ($node->isStatic() ? '' : '.prototype');
 
             $fqNS = $this->context__NAMESPACE__();
             $fqClass = $this->context__CLASS__();
@@ -884,7 +968,8 @@ class JSConverter extends PrettyPrinterAbstract
 
     public function pStmt_ClassConst(Stmt\ClassConst $node) {
         $output = '';
-        $destination = self::CLASS_OBJECT;
+//        $destination = self::CLASS_OBJECT;
+        $destination = $this->context__CLASS_VAR__();
         foreach ($node->consts as $const) {
             /** @var Node\Const_ $const */
             $output .= $destination . '.' . $const->name . ' = ' . $this->p($const->value) . ";\n";

@@ -52,45 +52,60 @@ PHP = (function() {
             PHP_NAMESPACE.prototype.class.apply(nsObject,arguments);
         })(this);
     };
+
+    /**
+     * The function below is run to declare a new class
+     *
+     * @param _class        Class name
+     * @param _extends      Parent class extended (optional)
+     * @param _implements   Array of interfaces implemented (optional)
+     * @param _definition   Static constructor for the class.  It should have the form:
+     *                      function(self,parent,__CLASS__)
+     *
+     * @returns PHP_CLASS
+     */
     //noinspection ReservedWordAsName
-    PHP_NAMESPACE.prototype.class = function (nsObject) {
-        // The function below is run to declare a new class
-        return function(_class, _extends, _implements) {
-            var superclassObj = _extends == null ? null : PHP.classDefinition(_extends);
+    PHP_NAMESPACE.prototype.class = function(_class, _extends, _implements, _definition) {
+        var superclassObj = _extends instanceof PHP_CLASS ? _extends : null;
 
-            var fqName = nsObject.name + '\\' + _class;
+        var fqName = this.name + '\\' + _class;
 
-            var classObj = function() {
-                if (arguments.length && arguments[0] === __DECLARE_SUBCLASS__) {
-                    // No PHP code should be run; this call is to declare
-                    // JS inheritance.
-                } else if (typeof this.__construct === 'function') {
-                    //superclassObj.call(this);
-                    this.__construct.apply(this, arguments)
-                } else {
-                    // No PHP constructor code to run
-                }
-            };
-
-            // Setting classObj.constructor should ensure that (classObj instanceof PHP_CLASS) === true
-            classObj.constructor = PHP_CLASS;
-            classObj.PHP_CLASS = fqName;
-            classObj.PHP_SUPERCLASS = _extends == null ? null : _extends;
-            classObj.PHP_IMPLEMENTS = _implements == null || !_implements.length ? null : [].concat(_implements);
-
-            if (superclassObj != null) {
-                classObj.prototype = new superclassObj(__DECLARE_SUBCLASS__);
-                classObj.prototype.constructor = classObj;
+        var classObj = function() {
+            if (arguments.length && arguments[0] === __DECLARE_SUBCLASS__) {
+                // No PHP code should be run; this call is to declare
+                // JS inheritance.
+            } else if (typeof this.__construct === 'function') {
+                //superclassObj.call(this);
+                this.__construct.apply(this, arguments);
+                // TODO hunt for parent constructors
+            } else {
+                // No PHP constructor code to run
             }
-
-            classObj.prototype.__parent = superclassObj;
-            classObj.prototype.__self = classObj;
-
-            nsObject[_class] = classObj;
-            PHP[fqName] = classObj;
-
-            return classObj;
         };
+
+        // Setting classObj.constructor should ensure that (classObj instanceof PHP_CLASS) === true
+        classObj.constructor = PHP_CLASS;
+        classObj.PHP_CLASS = fqName;
+        classObj.PHP_SUPERCLASS = _extends == null ? null : _extends;
+        classObj.PHP_IMPLEMENTS = _implements == null || !_implements.length ? null : [].concat(_implements);
+
+        if (superclassObj != null) {
+            classObj.prototype = new superclassObj(__DECLARE_SUBCLASS__);
+            classObj.prototype.constructor = classObj;
+        }
+
+        classObj.prototype.__parent = superclassObj;
+        classObj.prototype.__self = classObj;
+
+        this[_class] = classObj;
+        PHP[fqName] = classObj;
+
+        if (typeof _definition === 'function') {
+            //_definition(self,parent,__CLASS__,__NAMESPACE__);
+            _definition(classObj, superclassObj, fqName, this.name);
+        }
+
+        return classObj;
     };
 
     function PHP_ARRAY() {
@@ -296,10 +311,16 @@ PHP = (function() {
          *
          * To define a namespaced class, use nsObject.class(...);
          *
+         * @param _class        Class name
+         * @param _extends      Parent class extended (optional)
+         * @param _implements   Array of interfaces implemented (optional)
+         * @param _definition   Static constructor for the class.  It should have the form:
+         *                      function(self,parent,__CLASS__)
+         *
          * @phpKeyword
          */
-        'class': function (_class, _extends, _implements) {
-            return PHP.namespace('\\').class(_class, _extends, _implements);
+        'class': function (_class, _extends, _implements, _definition) {
+            return PHP.namespace('\\').class(_class, _extends, _implements, _definition);
 
 //            PHP.namespace('\\',function(GLOBAL_NS){
 //                return GLOBAL_NS.class(_class, _extends, _implements);
