@@ -138,7 +138,7 @@ class JSConverter extends PrettyPrinterAbstract
 
     // Names
 
-    private static $PHP_KEYWORDS = ['null','true','false'];
+    private static $PHP_KEYWORDS = ['null','true','false','parent'];
 
     public function pName(Name $node) {
         $class = $node->toString('.');
@@ -199,7 +199,8 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function context__USE_VARS__() {
-        return $this->contextSearch('__USE_VARS__');
+        $__USE_VARS__ = $this->contextSearch('__USE_VARS__');
+        return is_array($__USE_VARS__) ? $__USE_VARS__ : [];
     }
 
     public function context__CLASS_VAR__() {
@@ -307,51 +308,86 @@ class JSConverter extends PrettyPrinterAbstract
         if (self::isPlainVariable($node->var)) {
             $this->registerScopeVariable($node->var);
         }
-
         return $this->pInfixOp('Expr_AssignRef', $node->var, ' = ', $node->expr);
     }
 
     public function pExpr_AssignOp_Plus(AssignOp\Plus $node) {
+        if (self::isPlainVariable($node->var)) {
+            $this->registerScopeVariable($node->var);
+        }
         return $this->pInfixOp('Expr_AssignOp_Plus', $node->var, ' += ', $node->expr);
     }
 
     public function pExpr_AssignOp_Minus(AssignOp\Minus $node) {
+        if (self::isPlainVariable($node->var)) {
+            $this->registerScopeVariable($node->var);
+        }
         return $this->pInfixOp('Expr_AssignOp_Minus', $node->var, ' -= ', $node->expr);
     }
 
     public function pExpr_AssignOp_Mul(AssignOp\Mul $node) {
+        if (self::isPlainVariable($node->var)) {
+            $this->registerScopeVariable($node->var);
+        }
         return $this->pInfixOp('Expr_AssignOp_Mul', $node->var, ' *= ', $node->expr);
     }
 
     public function pExpr_AssignOp_Div(AssignOp\Div $node) {
+        if (self::isPlainVariable($node->var)) {
+            $this->registerScopeVariable($node->var);
+        }
         return $this->pInfixOp('Expr_AssignOp_Div', $node->var, ' /= ', $node->expr);
     }
 
     public function pExpr_AssignOp_Concat(AssignOp\Concat $node) {
-        return $this->pInfixOp('Expr_AssignOp_Concat', $node->var, ' += ', $node->expr);
+        if (self::isPlainVariable($node->var)) {
+            $this->registerScopeVariable($node->var);
+        }
+
+        $expr = $this->phpStringCastIfNecessary($node->expr);
+
+        return $this->pInfixOp('Expr_AssignOp_Concat', $node->var, ' += ', $expr);
     }
 
     public function pExpr_AssignOp_Mod(AssignOp\Mod $node) {
+        if (self::isPlainVariable($node->var)) {
+            $this->registerScopeVariable($node->var);
+        }
         return $this->pInfixOp('Expr_AssignOp_Mod', $node->var, ' %= ', $node->expr);
     }
 
     public function pExpr_AssignOp_BitwiseAnd(AssignOp\BitwiseAnd $node) {
+        if (self::isPlainVariable($node->var)) {
+            $this->registerScopeVariable($node->var);
+        }
         return $this->pInfixOp('Expr_AssignOp_BitwiseAnd', $node->var, ' &= ', $node->expr);
     }
 
     public function pExpr_AssignOp_BitwiseOr(AssignOp\BitwiseOr $node) {
+        if (self::isPlainVariable($node->var)) {
+            $this->registerScopeVariable($node->var);
+        }
         return $this->pInfixOp('Expr_AssignOp_BitwiseOr', $node->var, ' |= ', $node->expr);
     }
 
     public function pExpr_AssignOp_BitwiseXor(AssignOp\BitwiseXor $node) {
+        if (self::isPlainVariable($node->var)) {
+            $this->registerScopeVariable($node->var);
+        }
         return $this->pInfixOp('Expr_AssignOp_BitwiseXor', $node->var, ' ^= ', $node->expr);
     }
 
     public function pExpr_AssignOp_ShiftLeft(AssignOp\ShiftLeft $node) {
+        if (self::isPlainVariable($node->var)) {
+            $this->registerScopeVariable($node->var);
+        }
         return $this->pInfixOp('Expr_AssignOp_ShiftLeft', $node->var, ' <<= ', $node->expr);
     }
 
     public function pExpr_AssignOp_ShiftRight(AssignOp\ShiftRight $node) {
+        if (self::isPlainVariable($node->var)) {
+            $this->registerScopeVariable($node->var);
+        }
         return $this->pInfixOp('Expr_AssignOp_ShiftRight', $node->var, ' >>= ', $node->expr);
     }
 
@@ -386,7 +422,9 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pExpr_BinaryOp_Concat(BinaryOp\Concat $node) {
-        return $this->pInfixOp('Expr_BinaryOp_Concat', $node->left, ' + ', $node->right);
+        $left = $this->phpStringCastIfNecessary($node->left);
+        $right = $this->phpStringCastIfNecessary($node->right);
+        return $this->pInfixOp('Expr_BinaryOp_Concat', $left, ' + ', $right);
     }
 
     public function pExpr_BinaryOp_Mod(BinaryOp\Mod $node) {
@@ -499,10 +537,16 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pExpr_PreInc(Expr\PreInc $node) {
+        if (self::isPlainVariable($node->var)) {
+            $this->registerScopeVariable($node->var);
+        }
         return $this->pPrefixOp('Expr_PreInc', '++', $node->var);
     }
 
     public function pExpr_PreDec(Expr\PreDec $node) {
+        if (self::isPlainVariable($node->var)) {
+            $this->registerScopeVariable($node->var);
+        }
         return $this->pPrefixOp('Expr_PreDec', '--', $node->var);
     }
 
@@ -567,7 +611,7 @@ class JSConverter extends PrettyPrinterAbstract
 
     public function pExpr_FuncCall(Expr\FuncCall $node) {
         if ($node->name instanceof Name) {
-            $name = 'PHP.' . $node->name->toString('!!!');
+            $name = 'PHP.' . $node->name->toString('.');
         } else {
             $name = 'PHP[' . $this->p($node->name) . ']';
         }
@@ -580,14 +624,18 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pExpr_StaticCall(Expr\StaticCall $node) {
-        return $this->p($node->class) . '.'
-             . ($node->name instanceof Expr
-                ? ($node->name instanceof Expr\Variable
-                   || $node->name instanceof Expr\ArrayDimFetch
-                   ? $this->p($node->name)
-                   : '{' . $this->p($node->name) . '}')
-                : $node->name)
-             . '(' . $this->pCommaSeparated($node->args) . ')';
+        $class = $this->p($node->class);
+
+        $method = $node->name instanceof Expr
+              ? '[' . $this->p($node->name) . ']'
+              : '.'.$node->name;
+//            ? ($node->name instanceof Expr\Variable || $node->name instanceof Expr\ArrayDimFetch
+//                ? '[' . $this->p($node->name) . ']')
+//                : '[' . $this->p($node->name) . ']')
+
+        $args = $this->pCommaSeparated($node->args);
+
+        return "$class$method($args)";
     }
 
     public function pExpr_Empty(Expr\Empty_ $node) {
@@ -718,27 +766,27 @@ class JSConverter extends PrettyPrinterAbstract
         $classNode = $node->class;
 
         if ($classNode instanceof Name) {
-            if ($classNode instanceof Name\FullyQualified) {
-                $class = 'PHP['.json_encode("\\$classNode").']';
-            } else if ($classNode instanceof Name\Relative) {
-//                $class = self::NAMESPACE_OBJECT . '.' . implode('.', $classNode->parts);
-                $class = (string)$classNode;
-                $class = self::NAMESPACE_OBJECT . '.' . strtr($class,'\\','.');
-            } else {
-                $class = (string)$classNode;
-                if ($class === self::CLASS_OBJECT || $class === self::context__CLASS_VAR__()) {
-                    // leave as is
-//                    $class = '__CLASS['.json_encode("\\$classNode").']';
-                } else {
-                    $__USE_VARS__ = $this->context__USE_VARS__();
-                    if (is_array($__USE_VARS__) && in_array($class, array_keys($__USE_VARS__))) {
-                        // leave as is
-//                        $class = '__USE['.json_encode("\\$classNode").']';
-                    } else {
-                        $class = self::NAMESPACE_OBJECT . '.' . strtr($class,'\\','.');
-                    }
-                }
-            }
+//            if ($classNode instanceof Name\FullyQualified) {
+//                $class = 'PHP['.json_encode("\\$classNode").']';
+//            } else if ($classNode instanceof Name\Relative) {
+////                $class = self::NAMESPACE_OBJECT . '.' . implode('.', $classNode->parts);
+//                $class = (string)$classNode;
+//                $class = self::NAMESPACE_OBJECT . '.' . strtr($class,'\\','.');
+//            } else {
+//                $class = (string)$classNode;
+//                if ($class === self::CLASS_OBJECT || $class === self::context__CLASS_VAR__()) {
+//                    // leave as is
+////                    $class = '__CLASS['.json_encode("\\$classNode").']';
+//                } else {
+//                    $__USE_VARS__ = $this->context__USE_VARS__();
+//                    if (is_array($__USE_VARS__) && in_array($class, array_keys($__USE_VARS__))) {
+//                        // leave as is
+////                        $class = '__USE['.json_encode("\\$classNode").']';
+//                    } else {
+//                        $class = self::NAMESPACE_OBJECT . '.' . strtr($class,'\\','.');
+//                    }
+//                }
+//            }
 
             $class = $this->p($classNode);
         } else {
@@ -796,8 +844,9 @@ class JSConverter extends PrettyPrinterAbstract
             '__NAMESPACE__' => $fqNS,
         );
 
-        return 'PHP.namespace("' . $fqNS . '",function(' . $nsObjName . ')'
-        . ' {' . $this->pContext($node->stmts, true, $context) . "\n" . '});';
+        return 'PHP.namespace("' . $fqNS . '",function(' . $nsObjName . ',__NAMESPACE__) {'
+             . $this->pContext($node->stmts, true, $context)
+             . "\n});";
 
 
 //        if ($this->canUseSemicolonNamespaces) {
@@ -809,7 +858,7 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pStmt_Use(Stmt\Use_ $node) {
-        $uses = [];
+        $uses = $this->context__USE_VARS__();
 
         $pNodes = array();
         foreach ($node->uses as $use) {
@@ -1210,7 +1259,7 @@ class JSConverter extends PrettyPrinterAbstract
             if (is_string($element)) {
                 $return[] = json_encode($element,  JSON_UNESCAPED_SLASHES);
             } else {
-                $return[] = $this->p($element);
+                $return[] = $this->p($this->phpStringCastIfNecessary($element));
             }
         }
 
@@ -1252,5 +1301,15 @@ class JSConverter extends PrettyPrinterAbstract
 
     public function registerScopeVariable(Expr $node) {
         $this->codeGen_varList['$'.$node->name] = true;
+    }
+
+    public function phpStringCastIfNecessary(Expr $expr) {
+        if ($expr instanceof Scalar\String) {
+            return $expr;
+        } else {
+            // wrap in PHP.toString
+            $expr = new Cast\String($expr);
+            return $expr;
+        }
     }
 }
