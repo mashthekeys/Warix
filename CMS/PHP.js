@@ -1,17 +1,23 @@
 PHP = (function() {
     if (window.PHP) return PHP;
 
-    // unique internal markers to signal class definition
-    var __DECLARE_CLASS__ = new (function(){});
+    // unique internal marker to signal class definition
     var __DECLARE_SUBCLASS__ = new (function(){});
 
     var PHP_OBJECT = function(){};
 
-    var PHP_CLASS = function (nsObject, _class, superclassObj, _implements) {
-        if (this === window) {
-            // To ensure this function does not execute in the global scope
-            return this;
-        }
+    var PHP_CLASS = function (nsObject, __CLASS__1, superclassObject, __IMPLEMENTS__1) {
+        // To ensure this function does not execute in the global scope
+        if (this === window) return;
+
+        var __CLASS__, __SUPERCLASS__, __IMPLEMENTS__;
+
+        __CLASS__ = "" + __CLASS__1;
+
+        __SUPERCLASS__ = (superclassObject == null) ? null
+                            : superclassObject.__CLASS__;
+
+        __IMPLEMENTS__ = [].concat(__IMPLEMENTS__1);
 
         // The function below is run to construct instance objects and to define subclass prototypes
         var CONSTRUCTOR = function() {
@@ -27,12 +33,20 @@ PHP = (function() {
             }
         };
 
-        if (superclassObj == null) {
+        if (superclassObject == null) {
             CONSTRUCTOR.prototype = new PHP_OBJECT();
         } else {
-            CONSTRUCTOR.prototype = new superclassObj(__DECLARE_SUBCLASS__);
+            CONSTRUCTOR.prototype = new superclassObject(__DECLARE_SUBCLASS__);
         }
         CONSTRUCTOR.prototype.constructor = CONSTRUCTOR;
+
+        CONSTRUCTOR.__CLASS__ = __CLASS__;
+        CONSTRUCTOR.__SUPERCLASS__ = __SUPERCLASS__;
+        CONSTRUCTOR.__IMPLEMENTS__ = __IMPLEMENTS__;
+
+        this.__CLASS__ = __CLASS__;
+        this.__SUPERCLASS__ = __SUPERCLASS__;
+        this.__IMPLEMENTS__ = __IMPLEMENTS__;
 
         return CONSTRUCTOR;
     };
@@ -42,6 +56,12 @@ PHP = (function() {
             throw 'PHP_NAMESPACE: fqName must be string';
 //        } else if (fqName.indexOf('\\') == -1) {
 //            throw 'PHP_NAMESPACE: fqName must contain \\';
+        }
+
+        var lastBackslash = fqName.lastIndexOf('\\');
+        if (lastBackslash > -1) {
+            var parentName = fqName.substr(0, lastBackslash);
+
         }
 
         this.name = fqName;
@@ -70,35 +90,26 @@ PHP = (function() {
 
         var fqName = this.name + '\\' + _class;
 
-        var classObj = function() {
-            if (arguments.length && arguments[0] === __DECLARE_SUBCLASS__) {
-                // No PHP code should be run; this call is to declare
-                // JS inheritance.
-            } else if (typeof this.__construct === 'function') {
-                //superclassObj.call(this);
-                this.__construct.apply(this, arguments);
-                // TODO hunt for parent constructors
-            } else {
-                // No PHP constructor code to run
-            }
-        };
-
-        // Setting classObj.constructor should ensure that (classObj instanceof PHP_CLASS) === true
-        classObj.constructor = PHP_CLASS;
-        classObj.PHP_CLASS = fqName;
-        classObj.PHP_SUPERCLASS = _extends == null ? null : _extends;
-        classObj.PHP_IMPLEMENTS = _implements == null || !_implements.length ? null : [].concat(_implements);
-
-        if (superclassObj != null) {
-            classObj.prototype = new superclassObj(__DECLARE_SUBCLASS__);
-            classObj.prototype.constructor = classObj;
-        }
-
-        classObj.prototype.__parent = superclassObj;
-        classObj.prototype.__self = classObj;
+        var classObj = new PHP_CLASS(this, fqName, superclassObj, _implements);
+        //var classObj = function() {
+        //    if (arguments.length && arguments[0] === __DECLARE_SUBCLASS__) {
+        //        // No PHP code should be run; this call is to declare
+        //        // JS inheritance.
+        //    } else if (typeof this.__construct === 'function') {
+        //        //superclassObj.call(this);
+        //        this.__construct.apply(this, arguments);
+        //        // TODO hunt for parent constructors
+        //    } else {
+        //        // No PHP constructor code to run
+        //    }
+        //};
+        //
+        //// Setting classObj.constructor should ensure that (classObj instanceof PHP_CLASS) === true
+        //classObj.constructor = PHP_CLASS;
 
         this[_class] = classObj;
         PHP[fqName] = classObj;
+        PHP.__classes__[fqName] = classObj;
 
         if (typeof _definition === 'function') {
             //_definition(self,parent,__CLASS__,__NAMESPACE__);
@@ -108,6 +119,34 @@ PHP = (function() {
         return classObj;
     };
 
+    PHP_NAMESPACE.prototype.resolve = function(name) {
+        if (name == null) {
+            throw 'resolve: Null or undefined name.';
+        }
+        if (typeof name !== 'string') {
+            throw 'resolve: Invalid name type.';
+        }
+        if (name.charAt(0) === '\\') {
+            return PHP[name];
+        }
+        if (name.lastIndexOf('\\') == -1) {
+            return this[name];
+        }
+        return PHP['\\'+this.name+'\\'+name];
+    };
+
+    PHP_NAMESPACE.prototype.resolveClass = function(name) {
+        var c = this.resolve(name);
+        if (!(c instanceof PHP_CLASS)) throw 'resolveClass: Class definition not found.';
+        return c;
+    };
+
+    PHP_NAMESPACE.prototype.resolveFunction = function(name) {
+        var fn = this.resolve(name);
+        if ((typeof fn !== 'function') || !(fn instanceof PHP_CLASS)) throw 'resolveFunction: Function definition not found.';
+        return fn;
+    };
+
     function PHP_ARRAY() {
         this.__keys = [];
         this.__values = [];
@@ -115,10 +154,13 @@ PHP = (function() {
         this.__lookup = {};
         this.__index = {};
         this.__lastIndex = -1;
+        this.length = 0;
 
-        if (arguments.length) this.__push(arguments);
+        if (arguments.length) this.push(arguments);
+
+        return this;
     }
-    
+
     /** Used to implement PHP's reset(), next(), each(), etc. */
     PHP_ARRAY.prototype.__position = -1;
     
@@ -155,7 +197,7 @@ PHP = (function() {
     PHP_ARRAY.prototype.__isset = function($name) {
         return this.index.hasOwnProperty($name);
     };
-    PHP_ARRAY.prototype.__push = function() {
+    PHP_ARRAY.prototype.push = function() {
         var N = arguments.length,
             lastIndex = this.__lastIndex;
 
@@ -169,7 +211,7 @@ PHP = (function() {
                 // Import [ key, value ]
                 key = ''+arg[0];
 
-                if ((''+(keyAsInt = parseInt(key))) === key) {
+                if ((''+(keyAsInt = parseInt(key,10))) === key) {
                     if (keyAsInt > lastIndex) {
                         lastIndex = keyAsInt;
                     }
@@ -187,8 +229,34 @@ PHP = (function() {
 
         this.__lastIndex = lastIndex;
     };
+
+    PHP_ARRAY.prototype.__clone = function() {
+        var array = new PHP_ARRAY();
+        array.__keys = this.__keys.concat();
+        array.__values = this.__values.concat();
+        array.__lastIndex = this.__lastIndex;
+
+        var index = this.__index;
+        var lookup = this.__lookup;
+        for (var key in index) if (index.hasOwnProperty(key)) {
+            array.__index[key] = index[key];
+            array.__lookup[key] = lookup[key];
+        }
+
+        return array;
+    };
+
+    PHP_ARRAY.prototype.toString = function () { return 'Array'; };
     // end PHP_ARRAY methods
 
+    var NULL_ITERATOR = {
+        current: function(){},
+        hasNext: function(){ return false },
+        key: function(){},
+        next: function(){}
+    };
+
+    // Define basic declarative and language constructs in this file.
     return {
         NS: {},
         CONSTANTS: {},
@@ -198,63 +266,44 @@ PHP = (function() {
             PHP_NAMESPACE: PHP_NAMESPACE // A javascript object used to define classes
         },
 
-        isPHPArray: function(a) {
+        is_array: function(a) {
             return a instanceof PHP_ARRAY;
         },
-        isPHPObject: function(a) {
-            return a instanceof PHP_OBJECT;
+        isPHPClass: function(c) {
+            return c instanceof PHP_CLASS;
         },
-        array: function() {
-            var phpArray = new PHP_ARRAY();
-            if (arguments.length) phpArray.__push.apply(phpArray, arguments);
-            return phpArray;
+        /**
+         * Return true if this object was created in the PHP.js environment.
+         *
+         * Note that PHP.is_object treats plain javascript objects as objects,
+         * but this function does not.
+         * @param o
+         * @returns {boolean}
+         */
+        isPHPObject: function(o) {
+            return o instanceof PHP_OBJECT;
         },
+        array: PHP_ARRAY,
         foreach: function(traversable, callback) {
             // PHP.foreach($array) :- Returns an iterator supporting current, key, next and hasNext
             // PHP.foreach($array, $callback) :- Iterates through callback
             var useIterator = arguments.length < 2;
 
-            var n, N, keys, values, key, setFn, retVal;
+            var n, N, keys, values, key, retVal;
 
             if (traversable == null || typeof traversable !== 'object') {
                 // Ignore non-array values, as PHP would.
-                keys = values = [];
-
-            } else if (traversable instanceof PHP_ARRAY) {
-                // iterate PHP array
-                keys = traversable.__keys.concat();
-                values = traversable.__values.concat();
-
-            } else if (traversable instanceof PHP_OBJECT) {
-                // iterate PHP object: only keys beginning $ are traversed
-                keys = [];
-                values = [];
-                for (key in traversable) if (traversable.hasOwnProperty(key)) {
-                    if (typeof key === 'string' && key.charAt(0) === '$') {
-                        keys.push(key.substr(1));
-                        values.push(traversable[key]);
-                    }
-                }
-
-            } else if (Array.isArray(traversable)) {
-                // iterate plain JS array
-                keys = [];
-                values = [];
-                N = traversable.length;
-                for (n = 0; n < N; ++n) {
-                    keys.push(n);
-                    values.push(traversable[n]);
-                }
-
-            } else {
-                // iterate plain JS object
-                keys = [];
-                values = [];
-                for (key in traversable) if (traversable.hasOwnProperty(key)) {
-                    keys.push(key);
-                    values.push(traversable[key]);
+                if (useIterator) {
+                    return NULL_ITERATOR;
+                } else {
+                    return;
                 }
             }
+
+            traversable = PHP.toArray(traversable);
+            keys = traversable.__keys.concat();
+            values = traversable.__values.concat();
+            N = values.length;
 
             if (useIterator) {
                 return (function (keys, values, length) {
@@ -263,20 +312,18 @@ PHP = (function() {
                     this.current = function () {
                         return values[pos];
                     };
-                    this.next = function () {
-                        return values[++pos];
+                    this.hasNext = function () {
+                        return pos < length;
                     };
                     this.key = function () {
                         return keys[pos];
                     };
-                    this.hasNext = function () {
-                        return pos < length;
+                    this.next = function () {
+                        return values[++pos];
                     };
                     return this;
                 })(keys, values, N);
             } else {
-                N = values.length;
-                
                 if (typeof callback !== 'function') {
                     callback = PHP.__lookup_user_func(callback);
                 }
@@ -301,7 +348,7 @@ PHP = (function() {
             }
 
             if (arguments.length > 1) {
-                declaration.call(nsObject, nsObject);
+                declaration.call(nsObject, nsObject, fqNamespace);
             }
 
             return nsObject;
@@ -309,7 +356,8 @@ PHP = (function() {
         /**
          * Calling PHP.class declares a global (un-namespaced) class.
          *
-         * To define a namespaced class, use nsObject.class(...);
+         * To define a namespaced class, use PHP.namespace("Some\\Namespace").class(...)
+         * or nsObject.class(...);
          *
          * @param _class        Class name
          * @param _extends      Parent class extended (optional)
@@ -321,37 +369,7 @@ PHP = (function() {
          */
         'class': function (_class, _extends, _implements, _definition) {
             return PHP.namespace('\\').class(_class, _extends, _implements, _definition);
-
-//            PHP.namespace('\\',function(GLOBAL_NS){
-//                return GLOBAL_NS.class(_class, _extends, _implements);
-//            });
-        },
-        
-        /**
-         * @jsOnly
-         */
-        classDefinition: function(fqClass) {
-            if (typeof fqClass === 'function') {
-                if (fqClass.hasOwnProperty('PHP_CLASS')) {
-                    if (fqClass !== PHP[fqClass.PHP_CLASS]) throw 'classDefinition: fqClass must be registered in the PHP library.';
-
-                    return fqClass;
-                } else {
-                    throw 'classDefinition: fqClass must be PHP_CLASS object';
-                }
-            }
-
-            if (typeof fqClass !== 'string') {
-                throw 'classDefinition: fqClass must be PHP_CLASS function or string '+typeof  fqClass;
-            } else if (fqClass.indexOf('\\') == -1) {
-                throw 'classDefinition: fqClass must contain \\';
-            }
-
-            if (!PHP.hasOwnProperty(fqClass)) {
-                throw 'classDefinition: NO DEFINITION FOR '+fqClass;
-            }
-
-            return PHP[fqClass];
         }
     };
 })();
+
