@@ -6,18 +6,19 @@ PHP = (function() {
 
     var PHP_OBJECT = function(){};
 
-    var PHP_CLASS = function (nsObject, __CLASS__1, superclassObject, __IMPLEMENTS__1) {
+    var PHP_CLASS = function (nsObject, class_, superclassObject, implements_) {
         // To ensure this function does not execute in the global scope
         if (this === window) return;
 
-        var __CLASS__, __SUPERCLASS__, __IMPLEMENTS__;
+        var __CLASS__ = "" + class_;
 
-        __CLASS__ = "" + __CLASS__1;
+        var __SUPERCLASS__ = PHP.isPHPClass(superclassObject)
+            ? superclassObject.__CLASS__
+            : null;
 
-        __SUPERCLASS__ = (superclassObject == null) ? null
-                            : superclassObject.__CLASS__;
-
-        __IMPLEMENTS__ = [].concat(__IMPLEMENTS__1);
+        var __IMPLEMENTS__ = implements_.length
+            ? Array.prototype.filter.call(implements_,PHP.isPHPClass)
+            : [];
 
         // The function below is run to construct instance objects and to define subclass prototypes
         var CONSTRUCTOR = function() {
@@ -91,21 +92,6 @@ PHP = (function() {
         var fqName = this.name + '\\' + _class;
 
         var classObj = new PHP_CLASS(this, fqName, superclassObj, _implements);
-        //var classObj = function() {
-        //    if (arguments.length && arguments[0] === __DECLARE_SUBCLASS__) {
-        //        // No PHP code should be run; this call is to declare
-        //        // JS inheritance.
-        //    } else if (typeof this.__construct === 'function') {
-        //        //superclassObj.call(this);
-        //        this.__construct.apply(this, arguments);
-        //        // TODO hunt for parent constructors
-        //    } else {
-        //        // No PHP constructor code to run
-        //    }
-        //};
-        //
-        //// Setting classObj.constructor should ensure that (classObj instanceof PHP_CLASS) === true
-        //classObj.constructor = PHP_CLASS;
 
         this[_class] = classObj;
         PHP[fqName] = classObj;
