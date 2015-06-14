@@ -266,12 +266,30 @@ PHP = (function() {
             PHP_NAMESPACE: PHP_NAMESPACE // A javascript object used to define classes
         },
 
-        is_array: function(a) {
-            return a instanceof PHP_ARRAY;
+        array: PHP_ARRAY,
+
+        /**
+         * Calling PHP.class() declares a global (un-namespaced) class.
+         *
+         * To define a namespaced class, use PHP.namespace("Some\\Namespace").class(...)
+         * or nsObject.class(...);
+         *
+         * @param _class        Class name
+         * @param _extends      Parent class extended (optional)
+         * @param _implements   Array of interfaces implemented (optional)
+         * @param _definition   Static constructor for the class.  It should have the form:
+         *                      function(self,parent,__CLASS__)
+         *
+         * @phpKeyword
+         */
+        'class': function (_class, _extends, _implements, _definition) {
+            return PHP.namespace('\\').class(_class, _extends, _implements, _definition);
         },
-        isPHPClass: function(c) {
-            return c instanceof PHP_CLASS;
-        },
+
+        is_array: function(a) { return a instanceof PHP_ARRAY; },
+
+        isPHPClass: function(c) { return c instanceof PHP_CLASS; },
+
         /**
          * Return true if this object was created in the PHP.js environment.
          *
@@ -280,10 +298,8 @@ PHP = (function() {
          * @param o
          * @returns {boolean}
          */
-        isPHPObject: function(o) {
-            return o instanceof PHP_OBJECT;
-        },
-        array: PHP_ARRAY,
+        isPHPObject: function(o) { return o instanceof PHP_OBJECT; },
+
         foreach: function(traversable, callback) {
             // PHP.foreach($array) :- Returns an iterator supporting current, key, next and hasNext
             // PHP.foreach($array, $callback) :- Iterates through callback
@@ -352,24 +368,13 @@ PHP = (function() {
             }
 
             return nsObject;
-        },
-        /**
-         * Calling PHP.class declares a global (un-namespaced) class.
-         *
-         * To define a namespaced class, use PHP.namespace("Some\\Namespace").class(...)
-         * or nsObject.class(...);
-         *
-         * @param _class        Class name
-         * @param _extends      Parent class extended (optional)
-         * @param _implements   Array of interfaces implemented (optional)
-         * @param _definition   Static constructor for the class.  It should have the form:
-         *                      function(self,parent,__CLASS__)
-         *
-         * @phpKeyword
-         */
-        'class': function (_class, _extends, _implements, _definition) {
-            return PHP.namespace('\\').class(_class, _extends, _implements, _definition);
         }
     };
 })();
 
+function PHPString(castVar) {
+    return !castVar ? '' : castVar.toString();
+}
+
+jQuery.getScript("PHP.functions.js");
+jQuery.getScript("PHP.classes.js");

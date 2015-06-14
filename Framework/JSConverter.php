@@ -583,7 +583,7 @@ class JSConverter extends PrettyPrinterAbstract
     }
 
     public function pExpr_Cast_String(Cast\String $node) {
-        return 'PHP.toString('.$this->p($node->expr).')';
+        return 'PHPString('.$this->p($node->expr).')';
 //        return $this->pPrefixOp('Expr_Cast_String', '(string) ', $node->expr);
     }
 
@@ -1307,7 +1307,7 @@ class JSConverter extends PrettyPrinterAbstract
         if ($expr instanceof Scalar\String) {
             return $expr;
         } else {
-            // wrap in PHP.toString
+            // wrap in PHPString
             $expr = new Cast\String($expr);
             return $expr;
         }
